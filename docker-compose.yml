@@ -1,0 +1,290 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------------
+  # PostgreSQL 15 Database (Dedicated Schemas Per Service)
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: logisphere-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: logisphere
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - logisphere_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d logisphere"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # LocalStack (Local AWS SQS Emulator)
+  # -------------------------------------------------------------
+  localstack:
+    image: localstack/localstack:3.0
+    container_name: logisphere-localstack
+    restart: unless-stopped
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: ap-south-1
+      DEFAULT_REGION: ap-south-1
+    volumes:
+      - ./docker/localstack/init-queues.sh:/etc/localstack/init/ready.d/init-queues.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - logisphere_network
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs list-queues || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------
+  # Database Migration & Admin Seeder Runner
+  # -------------------------------------------------------------
+  db-migrate:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: logisphere-db-migrate
+    restart: "no"
+    command: >
+      sh -c "node scripts/migrate-all.js && node services/auth-service/scripts/seedAdmin.js"
+    environment:
+      DATABASE_URL_AUTH: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
+      DATABASE_URL_SHIPMENT: postgresql://postgres:postgres@postgres:5432/logisphere?schema=shipment
+      DATABASE_URL_FLEET: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
+      DATABASE_URL_TRACKING: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
+      DATABASE_URL_NOTIFICATION: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
+      ADMIN_EMAIL: admin@logisphere.local
+      ADMIN_PASSWORD: AdminSecure2026!
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # -------------------------------------------------------------
+  # Auth & Organization Service (:5001)
+  # -------------------------------------------------------------
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: logisphere-auth-service
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
+      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  # -------------------------------------------------------------
+  # Shipment Service & Marketplace Matching Engine (:5002)
+  # -------------------------------------------------------------
+  shipment-service:
+    build:
+      context: .
+      dockerfile: services/shipment-service/Dockerfile
+    container_name: logisphere-shipment-service
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      PORT: 5002
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=shipment
+      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      AUTH_SERVICE_URL: http://auth-service:5001
+      FLEET_SERVICE_URL: http://fleet-dispatch-service:5003
+      AWS_REGION: ap-south-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      TEMP_REPORT_DIR: /app/services/shipment-service/temp_reports
+    volumes:
+      - reports_data:/app/services/shipment-service/temp_reports
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  # -------------------------------------------------------------
+  # Fleet & Dispatch Management Service (:5003)
+  # -------------------------------------------------------------
+  fleet-dispatch-service:
+    build:
+      context: .
+      dockerfile: services/fleet-dispatch-service/Dockerfile
+    container_name: logisphere-fleet-dispatch-service
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    environment:
+      PORT: 5003
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
+      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      AWS_REGION: ap-south-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      FLEET_QUEUE_URL: http://localstack:4566/000000000000/logisphere-fleet-queue
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  # -------------------------------------------------------------
+  # Tracking Service & GPS Route Simulator (:5004)
+  # -------------------------------------------------------------
+  tracking-service:
+    build:
+      context: .
+      dockerfile: services/tracking-service/Dockerfile
+    container_name: logisphere-tracking-service
+    restart: unless-stopped
+    ports:
+      - "5004:5004"
+    environment:
+      PORT: 5004
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
+      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      AWS_REGION: ap-south-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      TRACKING_QUEUE_URL: http://localstack:4566/000000000000/logisphere-tracking-queue
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  # -------------------------------------------------------------
+  # Notification Service & Event Reliability (:5005)
+  # -------------------------------------------------------------
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: logisphere-notification-service
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    environment:
+      PORT: 5005
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
+      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      AWS_REGION: ap-south-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      NOTIFICATION_QUEUE_URL: http://localstack:4566/000000000000/logisphere-notification-queue
+    networks:
+      - logisphere_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+
+  # -------------------------------------------------------------
+  # API Gateway & Security Entry Point (:5000)
+  # -------------------------------------------------------------
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: logisphere-api-gateway
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      AUTH_SERVICE_URL: http://auth-service:5001
+      SHIPMENT_SERVICE_URL: http://shipment-service:5002
+      FLEET_SERVICE_URL: http://fleet-dispatch-service:5003
+      TRACKING_SERVICE_URL: http://tracking-service:5004
+      NOTIFICATION_SERVICE_URL: http://notification-service:5005
+      CORS_ORIGIN: http://localhost:3000,http://localhost:5000
+    networks:
+      - logisphere_network
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      shipment-service:
+        condition: service_healthy
+      fleet-dispatch-service:
+        condition: service_healthy
+      tracking-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+
+  # -------------------------------------------------------------
+  # React Web Application & SaaS Landing Page (:3000)
+  # -------------------------------------------------------------
+  web-app:
+    build:
+      context: .
+      dockerfile: frontend/web-app/Dockerfile
+    container_name: logisphere-web-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - logisphere_network
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    name: logisphere_postgres_data
+  reports_data:
+    name: logisphere_reports_data
+
+networks:
+  logisphere_network:
+    name: logisphere_network
+    driver: bridge

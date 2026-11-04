@@ -1,0 +1,18 @@
+# LogiSphere — Root Docker Ignore
+node_modules
+npm-debug.log
+.git
+.gitignore
+docs
+coverage
+dist
+.env
+.env.local
+.env.*.local
+*.log
+
+# Sensitive secrets (Must be mounted or passed via environment, never baked in)
+services/auth-service/secrets/jwt-private.key
+
+# Temporary reports
+services/shipment-service/temp_reports
