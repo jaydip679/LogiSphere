@@ -7,6 +7,7 @@ jest.mock('../src/database/prisma', () => {
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      getOrganizationMembers: jest.fn(),
     },
     organization: {
       findUnique: jest.fn(),
@@ -37,9 +38,9 @@ jest.mock('../src/database/prisma', () => {
 const app = require('../src/app');
 const prisma = require('../src/database/prisma');
 const { hashPassword } = require('../src/utils/passwordUtils');
-const { generateAccessToken } = require('../src/utils/tokenUtils');
+const { generateAccessToken, hashToken } = require('../src/utils/tokenUtils');
 
-describe('Auth Service — API Endpoints', () => {
+describe('Auth Service — API Endpoints & Security Review', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -53,7 +54,7 @@ describe('Auth Service — API Endpoints', () => {
     });
   });
 
-  describe('POST /api/v1/auth/register/customer', () => {
+  describe('Customer Registration', () => {
     it('successfully registers an individual customer', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.user.create.mockResolvedValue({
@@ -97,10 +98,9 @@ describe('Auth Service — API Endpoints', () => {
     });
   });
 
-  describe('POST /api/v1/auth/login', () => {
+  describe('Authentication & Token Lifecycle', () => {
     it('authenticates valid credentials and returns tokens', async () => {
       const hashedPassword = await hashPassword('ValidPass123!');
-      prisma.user.findByEmail = jest.fn();
       prisma.user.findUnique.mockResolvedValue({
         id: 'usr_1',
         email: 'user@logisphere.local',
@@ -140,9 +140,72 @@ describe('Auth Service — API Endpoints', () => {
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INVALID_CREDENTIALS');
     });
+
+    it('successfully rotates a valid refresh token', async () => {
+      const rawToken = 'test_raw_refresh_token_12345';
+      const tokenHash = hashToken(rawToken);
+
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'tok_1',
+        userId: 'usr_1',
+        tokenHash,
+        isRevoked: false,
+        expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      });
+
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'usr_1',
+        email: 'user@logisphere.local',
+        role: 'CUSTOMER',
+        isActive: true,
+        memberships: [],
+      });
+
+      prisma.refreshToken.update.mockResolvedValue({});
+      prisma.refreshToken.create.mockResolvedValue({});
+
+      const res = await request(app).post('/api/v1/auth/refresh').send({
+        refreshToken: rawToken,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.accessToken).toBeDefined();
+      expect(res.body.data.refreshToken).toBeDefined();
+      expect(prisma.refreshToken.update).toHaveBeenCalled();
+    });
+
+    it('detects refresh-token reuse and terminates all user sessions', async () => {
+      const compromisedToken = 'compromised_refresh_token_abc';
+      const tokenHash = hashToken(compromisedToken);
+
+      // Token was already revoked previously!
+      prisma.refreshToken.findUnique.mockResolvedValue({
+        id: 'tok_compromised',
+        userId: 'victim_user_1',
+        tokenHash,
+        isRevoked: true,
+        revokedAt: new Date(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+      });
+
+      prisma.refreshToken.updateMany.mockResolvedValue({ count: 5 });
+
+      const res = await request(app).post('/api/v1/auth/refresh').send({
+        refreshToken: compromisedToken,
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('TOKEN_REUSE_DETECTED');
+      // Verifies all sessions for that user were revoked
+      expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId: 'victim_user_1', isRevoked: false },
+        data: expect.objectContaining({ isRevoked: true }),
+      });
+    });
   });
 
-  describe('POST /api/v1/organizations/register/company', () => {
+  describe('Company Onboarding & Tenant Isolation', () => {
     it('registers organization into PENDING_REVIEW and owner into COMPANY_OWNER', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
       prisma.organization.create.mockResolvedValue({
@@ -178,6 +241,95 @@ describe('Auth Service — API Endpoints', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data.organization.status).toBe('PENDING_REVIEW');
       expect(res.body.data.owner.role).toBe('COMPANY_OWNER');
+    });
+
+    it('blocks staff provisioning if organization is still PENDING_REVIEW', async () => {
+      const ownerToken = generateAccessToken({
+        sub: 'usr_owner_1',
+        email: 'owner@apex.local',
+        role: 'COMPANY_OWNER',
+        organizationId: 'org_pending_1',
+      });
+
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'org_pending_1',
+        status: 'PENDING_REVIEW',
+      });
+
+      const res = await request(app)
+        .post('/api/v1/organizations/staff')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          fullName: 'Driver Vikram',
+          email: 'vikram@apex.local',
+          phone: '+919876543211',
+          role: 'DRIVER',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ORGANIZATION_PENDING_REVIEW');
+    });
+
+    it('allows staff provisioning when organization is APPROVED', async () => {
+      const ownerToken = generateAccessToken({
+        sub: 'usr_owner_1',
+        email: 'owner@apex.local',
+        role: 'COMPANY_OWNER',
+        organizationId: 'org_approved_1',
+      });
+
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'org_approved_1',
+        status: 'APPROVED',
+      });
+
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue({
+        id: 'usr_driver_1',
+        email: 'vikram@apex.local',
+        fullName: 'Driver Vikram',
+        role: 'DRIVER',
+        mustChangePassword: true,
+      });
+      prisma.membership.create.mockResolvedValue({});
+      prisma.auditLog.create.mockResolvedValue({});
+
+      const res = await request(app)
+        .post('/api/v1/organizations/staff')
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .send({
+          fullName: 'Driver Vikram',
+          email: 'vikram@apex.local',
+          phone: '+919876543211',
+          role: 'DRIVER',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.user.role).toBe('DRIVER');
+      expect(res.body.data.temporaryCredentials).toBeDefined();
+    });
+
+    it('strictly forbids drivers from creating staff members', async () => {
+      const driverToken = generateAccessToken({
+        sub: 'usr_driver_1',
+        email: 'driver@apex.local',
+        role: 'DRIVER',
+        organizationId: 'org_approved_1',
+      });
+
+      const res = await request(app)
+        .post('/api/v1/organizations/staff')
+        .set('Authorization', `Bearer ${driverToken}`)
+        .send({
+          fullName: 'Another Driver',
+          email: 'driver2@apex.local',
+          phone: '+919876543212',
+          role: 'DRIVER',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('ROLE_UNAUTHORIZED');
     });
   });
 
@@ -254,6 +406,14 @@ describe('Auth Service — API Endpoints', () => {
 
     it('rejects internal requests without valid service key with 401', async () => {
       const res = await request(app).get('/internal/organizations/coverage?hub=Mumbai');
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('INTERNAL_AUTH_FAILED');
+    });
+
+    it('rejects internal requests with mismatched service key with 401', async () => {
+      const res = await request(app)
+        .get('/internal/organizations/coverage?hub=Mumbai')
+        .set('X-Internal-Service-Key', 'wrong_service_key');
       expect(res.status).toBe(401);
       expect(res.body.error.code).toBe('INTERNAL_AUTH_FAILED');
     });
