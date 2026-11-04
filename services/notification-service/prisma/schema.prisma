@@ -1,0 +1,70 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["notification"]
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+
+  @@schema("notification")
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  SENT
+  FAILED
+
+  @@schema("notification")
+}
+
+model InAppNotification {
+  id             String             @id @default(uuid())
+  recipientId    String
+  organizationId String?
+  title          String
+  message        String
+  category       String
+  status         NotificationStatus @default(UNREAD)
+  readAt         DateTime?
+  metadata       Json?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([recipientId, status])
+  @@index([recipientId, createdAt])
+  @@map("in_app_notifications")
+  @@schema("notification")
+}
+
+model NotificationLog {
+  id        String              @id @default(uuid())
+  eventId   String?
+  channel   NotificationChannel
+  recipient String
+  status    NotificationStatus
+  subject   String?
+  error     String?
+  sentAt    DateTime            @default(now())
+
+  @@index([eventId])
+  @@map("notification_logs")
+  @@schema("notification")
+}
+
+model ProcessedEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+  @@schema("notification")
+}
