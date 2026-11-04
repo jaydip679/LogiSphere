@@ -15,6 +15,7 @@
     "format:check": "prettier --check \"**/*.{js,jsx,json,md}\"",
     "test": "npm run test --workspaces --if-present",
     "db:migrate": "node scripts/migrate-all.js",
+    "seed:admin": "node services/auth-service/scripts/seedAdmin.js",
     "generate:keys": "node scripts/generate-jwt-keys.js"
   },
   "devDependencies": {
