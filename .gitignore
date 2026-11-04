@@ -150,3 +150,7 @@ vite.config.ts.timestamp-*
 
 # Private internal documentation
 /docs/
+
+# Temporary storage & reports
+storage/
+*.csv

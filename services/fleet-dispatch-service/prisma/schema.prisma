@@ -1,0 +1,162 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["fleet"]
+}
+
+enum DriverStatus {
+  AVAILABLE
+  ON_DUTY
+  INACTIVE
+
+  @@schema("fleet")
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_USE
+  MAINTENANCE
+  INACTIVE
+
+  @@schema("fleet")
+}
+
+enum VehicleType {
+  TWO_WHEELER
+  THREE_WHEELER
+  FOUR_WHEELER
+  TRUCK_SMALL
+  TRUCK_LARGE
+
+  @@schema("fleet")
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  REASSIGNED
+
+  @@schema("fleet")
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  RELEASED
+  EXPIRED
+
+  @@schema("fleet")
+}
+
+model Driver {
+  id             String       @id @default(uuid())
+  organizationId String
+  userId         String?
+  name           String
+  phone          String
+  licenseNumber  String       @unique
+  status         DriverStatus @default(AVAILABLE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  assignments  DispatchAssignment[]
+  reservations AssignmentReservation[]
+
+  @@index([organizationId, status])
+  @@map("drivers")
+  @@schema("fleet")
+}
+
+model Vehicle {
+  id                 String        @id @default(uuid())
+  organizationId     String
+  registrationNumber String        @unique
+  vehicleType        VehicleType
+  capacityKg         Int
+  status             VehicleStatus @default(AVAILABLE)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  assignments  DispatchAssignment[]
+  reservations AssignmentReservation[]
+
+  @@index([organizationId, status])
+  @@map("vehicles")
+  @@schema("fleet")
+}
+
+model DispatchAssignment {
+  id                 String           @id @default(uuid())
+  organizationId     String
+  shipmentId         String
+  driverId           String
+  vehicleId          String
+  assignedByUserId   String
+  status             AssignmentStatus @default(ACTIVE)
+  reassignmentReason String?
+  reassignedToId     String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  driver  Driver  @relation(fields: [driverId], references: [id])
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id])
+
+  @@index([shipmentId])
+  @@index([organizationId])
+  @@index([driverId, status])
+  @@index([vehicleId, status])
+  @@map("dispatch_assignments")
+  @@schema("fleet")
+}
+
+model AssignmentReservation {
+  id             String            @id @default(uuid())
+  organizationId String
+  shipmentId     String
+  driverId       String?
+  vehicleId      String?
+  status         ReservationStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  driver  Driver?  @relation(fields: [driverId], references: [id])
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
+
+  @@index([shipmentId, status])
+  @@index([organizationId])
+  @@map("assignment_reservations")
+  @@schema("fleet")
+}
+
+model ProcessedEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+  @@schema("fleet")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  actorScopeId   String
+  operation      String
+  key            String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([actorScopeId, operation, key])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+  @@schema("fleet")
+}
