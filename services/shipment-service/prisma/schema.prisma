@@ -1,0 +1,165 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["shipment"]
+}
+
+enum ShipmentStatus {
+  CREATED
+  CONFIRMED
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  DELAYED
+  DELIVERY_FAILED
+  RETURNED
+  CANCELLED
+  UNMATCHED
+
+  @@schema("shipment")
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+
+  @@schema("shipment")
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+
+  @@schema("shipment")
+}
+
+model Shipment {
+  id                    String         @id @default(uuid())
+  trackingNumber        String         @unique
+  customerId            String
+  assignedOrgId         String?
+  assignedDriverId      String?
+  assignedVehicleId     String?
+  status                ShipmentStatus @default(CREATED)
+  previousStatus        ShipmentStatus?
+  deliveryAttemptsCount Int            @default(0)
+  failureReason         String?
+
+  senderName            String
+  senderPhone           String
+  pickupAddress         String
+  pickupCity            String
+  pickupState           String
+  pickupPinCode         String
+  pickupHub             String
+
+  recipientName         String
+  recipientPhone        String
+  deliveryAddress       String
+  deliveryCity          String
+  deliveryState         String
+  deliveryPinCode       String
+  deliveryHub           String
+
+  category              String
+  packageDescription    String
+  weightKg              Decimal        @db.Decimal(8, 2)
+  lengthCm              Decimal?       @db.Decimal(8, 2)
+  widthCm               Decimal?       @db.Decimal(8, 2)
+  heightCm              Decimal?       @db.Decimal(8, 2)
+  estimatedDistanceKm   Decimal        @db.Decimal(8, 2)
+  estimatedPricePaise   Int
+  finalPricePaise       Int?
+  currency              String         @default("INR")
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  offers                MarketplaceOffer[]
+  quotes                Quote[]
+
+  @@index([customerId])
+  @@index([assignedOrgId])
+  @@index([status])
+  @@schema("shipment")
+}
+
+model MarketplaceOffer {
+  id             String      @id @default(uuid())
+  shipmentId     String
+  organizationId String
+  rankingScore   Int
+  status         OfferStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  shipment       Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([organizationId, status])
+  @@schema("shipment")
+}
+
+model Quote {
+  id             String      @id @default(uuid())
+  shipmentId     String
+  offerId        String
+  organizationId String
+  amountPaise    Int
+  currency       String      @default("INR")
+  notes          String?
+  status         QuoteStatus @default(PENDING)
+  expiresAt      DateTime
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  shipment       Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@schema("shipment")
+}
+
+model OutboxEvent {
+  id           String    @id @default(uuid())
+  eventId      String    @unique
+  eventType    String
+  aggregateId  String
+  payload      Json
+  targetQueues Json
+  isPublished  Boolean   @default(false)
+  publishedAt  DateTime?
+  retryCount   Int       @default(0)
+  lastError    String?
+  createdAt    DateTime  @default(now())
+
+  @@index([isPublished, createdAt])
+  @@schema("shipment")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  actorScopeId   String
+  operation      String
+  key            String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@unique([actorScopeId, operation, key])
+  @@index([actorScopeId, operation])
+  @@schema("shipment")
+}
