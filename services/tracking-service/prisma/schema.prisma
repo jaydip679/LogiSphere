@@ -1,0 +1,65 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["tracking"]
+}
+
+enum TrackingSource {
+  DRIVER
+  SYSTEM
+  SIMULATOR
+
+  @@schema("tracking")
+}
+
+model TrackingEvent {
+  id             String         @id @default(uuid())
+  trackingNumber String
+  shipmentId     String
+  status         String
+  source         TrackingSource @default(SYSTEM)
+  location       String?
+  latitude       Float?
+  longitude      Float?
+  actorId        String?
+  notes          String?
+  metadata       Json?
+  timestamp      DateTime       @default(now())
+
+  @@index([trackingNumber, timestamp])
+  @@index([shipmentId])
+  @@map("tracking_events")
+  @@schema("tracking")
+}
+
+model SimulatedRoutePoint {
+  id             String         @id @default(uuid())
+  trackingNumber String
+  shipmentId     String
+  source         TrackingSource @default(SIMULATOR)
+  latitude       Float
+  longitude      Float
+  sequenceOrder  Int
+  remainingKm    Float
+  estimatedEta   DateTime?
+  timestamp      DateTime       @default(now())
+
+  @@index([trackingNumber, sequenceOrder])
+  @@map("simulated_route_points")
+  @@schema("tracking")
+}
+
+model ProcessedEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique
+  eventType   String
+  processedAt DateTime @default(now())
+
+  @@map("processed_events")
+  @@schema("tracking")
+}
