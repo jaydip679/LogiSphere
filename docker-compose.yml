@@ -49,24 +49,24 @@ services:
       retries: 5
 
   # -------------------------------------------------------------
-  # Database Migration & Admin Seeder Runner
+  # Centralized Database Migration & Admin Seeder Runner
   # -------------------------------------------------------------
   db-migrate:
     build:
       context: .
-      dockerfile: services/auth-service/Dockerfile
+      dockerfile: docker/migration.Dockerfile
     container_name: logisphere-db-migrate
     restart: "no"
-    command: >
-      sh -c "node scripts/migrate-all.js && node services/auth-service/scripts/seedAdmin.js"
     environment:
       DATABASE_URL_AUTH: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
       DATABASE_URL_SHIPMENT: postgresql://postgres:postgres@postgres:5432/logisphere?schema=shipment
       DATABASE_URL_FLEET: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
       DATABASE_URL_TRACKING: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
       DATABASE_URL_NOTIFICATION: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
       ADMIN_EMAIL: admin@logisphere.local
-      ADMIN_PASSWORD: AdminSecure2026!
+      ADMIN_INITIAL_PASSWORD: AdminSecurePassword123!
+      ADMIN_FULL_NAME: Platform Administrator
     networks:
       - logisphere_network
     depends_on:
@@ -91,6 +91,9 @@ services:
       INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
       JWT_ACCESS_EXPIRY: 15m
       JWT_REFRESH_EXPIRY: 7d
+    volumes:
+      - ./services/auth-service/secrets/jwt-private.key:/app/services/auth-service/secrets/jwt-private.key:ro
+      - ./shared/keys/jwt-public.key:/app/shared/keys/jwt-public.key:ro
     networks:
       - logisphere_network
     depends_on:
@@ -118,7 +121,7 @@ services:
       AUTH_SERVICE_URL: http://auth-service:5001
       FLEET_SERVICE_URL: http://fleet-dispatch-service:5003
       AWS_REGION: ap-south-1
-      AWS_ENDPOINT_URL: http://localstack:4566
+      SQS_ENDPOINT: http://localstack:4566
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       TEMP_REPORT_DIR: /app/services/shipment-service/temp_reports
@@ -151,7 +154,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
       INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
       AWS_REGION: ap-south-1
-      AWS_ENDPOINT_URL: http://localstack:4566
+      SQS_ENDPOINT: http://localstack:4566
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       FLEET_QUEUE_URL: http://localstack:4566/000000000000/logisphere-fleet-queue
@@ -182,7 +185,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
       INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
       AWS_REGION: ap-south-1
-      AWS_ENDPOINT_URL: http://localstack:4566
+      SQS_ENDPOINT: http://localstack:4566
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       TRACKING_QUEUE_URL: http://localstack:4566/000000000000/logisphere-tracking-queue
@@ -213,10 +216,11 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
       INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
       AWS_REGION: ap-south-1
-      AWS_ENDPOINT_URL: http://localstack:4566
+      SQS_ENDPOINT: http://localstack:4566
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
       NOTIFICATION_QUEUE_URL: http://localstack:4566/000000000000/logisphere-notification-queue
+      NOTIFICATION_DLQ_URL: http://localstack:4566/000000000000/logisphere-notification-dlq
     networks:
       - logisphere_network
     depends_on:

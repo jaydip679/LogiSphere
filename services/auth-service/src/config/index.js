@@ -4,22 +4,28 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const privateKeyPath = process.env.JWT_PRIVATE_KEY_PATH
-  ? path.resolve(__dirname, '../../', process.env.JWT_PRIVATE_KEY_PATH)
-  : path.resolve(__dirname, '../../secrets/jwt-private.key');
+let privateKey = process.env.JWT_PRIVATE_KEY || null;
+let publicKey = process.env.JWT_PUBLIC_KEY || null;
 
-const publicKeyPath = process.env.JWT_PUBLIC_KEY_PATH
-  ? path.resolve(__dirname, '../../', process.env.JWT_PUBLIC_KEY_PATH)
-  : path.resolve(__dirname, '../../../../shared/keys/jwt-public.key');
+const resolveKeyPath = (envPath, defaultRelPath) => {
+  if (!envPath) return path.resolve(__dirname, defaultRelPath);
+  return path.isAbsolute(envPath) ? envPath : path.resolve(__dirname, '../../', envPath);
+};
 
-let privateKey = null;
-let publicKey = null;
+const privateKeyPath = resolveKeyPath(
+  process.env.JWT_PRIVATE_KEY_PATH,
+  '../../secrets/jwt-private.key'
+);
+const publicKeyPath = resolveKeyPath(
+  process.env.JWT_PUBLIC_KEY_PATH,
+  '../../../../shared/keys/jwt-public.key'
+);
 
 try {
-  if (fs.existsSync(privateKeyPath)) {
+  if (!privateKey && fs.existsSync(privateKeyPath)) {
     privateKey = fs.readFileSync(privateKeyPath, 'utf8');
   }
-  if (fs.existsSync(publicKeyPath)) {
+  if (!publicKey && fs.existsSync(publicKeyPath)) {
     publicKey = fs.readFileSync(publicKeyPath, 'utf8');
   }
 } catch (err) {

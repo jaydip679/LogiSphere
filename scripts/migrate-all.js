@@ -25,12 +25,32 @@ const runMigrations = () => {
 
     console.info(`\n--> Migrating schema '${service.schema}' in ${service.name}...`);
     try {
+      // Determine service-specific DATABASE_URL targeting the dedicated PostgreSQL schema
+      const schemaEnvKey = `DATABASE_URL_${service.schema.toUpperCase()}`;
+      let serviceDbUrl = process.env[schemaEnvKey];
+
+      if (!serviceDbUrl && process.env.DATABASE_URL) {
+        const base = process.env.DATABASE_URL;
+        if (base.includes('schema=')) {
+          serviceDbUrl = base.replace(/schema=[^&]+/, `schema=${service.schema}`);
+        } else if (base.includes('?')) {
+          serviceDbUrl = `${base}&schema=${service.schema}`;
+        } else {
+          serviceDbUrl = `${base}?schema=${service.schema}`;
+        }
+      }
+
+      if (!serviceDbUrl) {
+        serviceDbUrl = `postgresql://postgres:postgres@localhost:5432/logisphere?schema=${service.schema}`;
+      }
+
       const command = mode === 'dev' ? 'npx prisma migrate dev' : 'npx prisma migrate deploy';
       execSync(command, {
         cwd: serviceDir,
         stdio: 'inherit',
         env: {
           ...process.env,
+          DATABASE_URL: serviceDbUrl,
           DATABASE_SCHEMA: service.schema,
         },
       });

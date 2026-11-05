@@ -154,3 +154,10 @@ vite.config.ts.timestamp-*
 # Temporary storage & reports
 storage/
 *.csv
+
+
+# Private Keys & Secrets
+*private*.key
+**/secrets/*
+!**/secrets/.gitkeep
+!**/secrets/.gitignore
