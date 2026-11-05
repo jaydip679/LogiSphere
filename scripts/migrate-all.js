@@ -44,7 +44,20 @@ const runMigrations = () => {
         serviceDbUrl = `postgresql://postgres:postgres@localhost:5432/logisphere?schema=${service.schema}`;
       }
 
-      const command = mode === 'dev' ? 'npx prisma migrate dev' : 'npx prisma migrate deploy';
+      const migrationsDir = path.join(serviceDir, 'prisma', 'migrations');
+      const hasMigrations =
+        fs.existsSync(migrationsDir) &&
+        fs.readdirSync(migrationsDir).filter((f) => !f.startsWith('.')).length > 0;
+
+      let command;
+      if (mode === 'dev') {
+        command = 'npx prisma migrate dev';
+      } else if (hasMigrations) {
+        command = 'npx prisma migrate deploy';
+      } else {
+        command = 'npx prisma db push --skip-generate';
+      }
+
       execSync(command, {
         cwd: serviceDir,
         stdio: 'inherit',
@@ -56,7 +69,7 @@ const runMigrations = () => {
       });
       console.info(`✓ Successfully migrated ${service.name} (${service.schema})`);
     } catch (error) {
-      console.error(`✗ Migration failed for ${service.name} (${service.schema}):`, error.message);
+      console.error(`✗ Migration failed for ${service.name} (${service.schema}): ${error.message}`);
       process.exit(1);
     }
   }

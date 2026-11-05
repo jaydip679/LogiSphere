@@ -3,8 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install native build tools for compiling native dependencies like bcrypt
-RUN apk add --no-cache python3 make g++
+# Install native build tools for compiling native dependencies like bcrypt, and openssl for Prisma engine detection
+RUN apk add --no-cache python3 make g++ openssl
 
 # Copy root workspace manifests
 COPY package.json package-lock.json ./
@@ -33,6 +33,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5001
+
+# Install openssl runtime library required by Prisma on Alpine Linux
+RUN apk add --no-cache openssl
 
 # Run as non-root user node
 USER node

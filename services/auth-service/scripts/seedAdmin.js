@@ -14,8 +14,17 @@ const seedAdmin = async () => {
 
     if (existing) {
       console.info(
-        `[BOOTSTRAP] Platform Admin with email '${email}' already exists. No action required.`
+        `[BOOTSTRAP] Platform Admin with email '${email}' already exists. Updating credentials to match current configuration.`
       );
+      const passwordHash = await hashPassword(password);
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash,
+          fullName: fullName || existing.fullName,
+        },
+      });
+      console.info('✓ [BOOTSTRAP SUCCESS] Platform Admin credentials updated successfully.');
       return;
     }
 

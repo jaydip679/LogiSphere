@@ -3,8 +3,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install native build tools for compiling native dependencies like bcrypt
-RUN apk add --no-cache python3 make g++
+# Install native build tools for compiling native dependencies like bcrypt, and openssl for Prisma engine detection
+RUN apk add --no-cache python3 make g++ openssl
 
 # Copy root workspace manifests
 COPY package.json package-lock.json ./
@@ -27,17 +27,16 @@ COPY services/fleet-dispatch-service/prisma/ ./services/fleet-dispatch-service/p
 COPY services/tracking-service/prisma/ ./services/tracking-service/prisma/
 COPY services/notification-service/prisma/ ./services/notification-service/prisma/
 
-# Generate Prisma clients for all services
-RUN npx prisma generate --schema=./services/auth-service/prisma/schema.prisma && \
-    npx prisma generate --schema=./services/shipment-service/prisma/schema.prisma && \
-    npx prisma generate --schema=./services/fleet-dispatch-service/prisma/schema.prisma && \
-    npx prisma generate --schema=./services/tracking-service/prisma/schema.prisma && \
-    npx prisma generate --schema=./services/notification-service/prisma/schema.prisma
+# Generate Prisma client for auth-service (required by seedAdmin bootstrap script)
+RUN npx prisma generate --schema=./services/auth-service/prisma/schema.prisma
 
 # Production runner stage (keeps runtime lightweight without python3/make/g++)
 FROM node:20-alpine AS runner
 
 WORKDIR /app
+
+# Install openssl runtime library required by Prisma migration schema engine on Alpine Linux
+RUN apk add --no-cache openssl
 
 # Copy built node_modules and manifests from builder
 COPY --from=builder /app/node_modules ./node_modules

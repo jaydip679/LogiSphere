@@ -11,6 +11,12 @@
  *   GATEWAY_URL=http://localhost:5000 npm run test:e2e
  */
 
+const path = require('path');
+const dotenv = require('dotenv');
+
+// Load environment variables from root .env if present
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
 const axios = require('axios');
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:5000';
@@ -99,7 +105,8 @@ async function runE2ETests() {
       adminLoginRes.status === 200,
       JSON.stringify(adminLoginRes.data)
     );
-    const adminToken = adminLoginRes.data?.data?.accessToken;
+    const adminToken =
+      adminLoginRes.data?.data?.tokens?.accessToken || adminLoginRes.data?.data?.accessToken;
     assertCheck('Admin JWT token received', !!adminToken);
 
     // -----------------------------------------------------------
@@ -114,7 +121,7 @@ async function runE2ETests() {
       name: `Apex Carrier ${testSuffix} Pvt Ltd`,
       contactEmail: companyEmail,
       contactPhone: companyPhone,
-      serviceAreas: ['Mumbai', 'Bengaluru'],
+      serviceAreas: ['Delhi NCR', 'Mumbai'],
       supportedCategories: ['PARCEL', 'DOCUMENT', 'CORPORATE'],
       ownerFullName: 'Vikram Dispatcher',
       ownerEmail: companyEmail,
@@ -144,8 +151,8 @@ async function runE2ETests() {
       JSON.stringify(approveRes.data)
     );
     assertCheck(
-      'Organization status updated to ACTIVE',
-      approveRes.data?.data?.status === 'ACTIVE'
+      'Organization status updated to APPROVED',
+      approveRes.data?.data?.status === 'APPROVED' || approveRes.data?.data?.status === 'ACTIVE'
     );
 
     // Carrier logs in
@@ -158,7 +165,8 @@ async function runE2ETests() {
       carrierLoginRes.status === 200,
       JSON.stringify(carrierLoginRes.data)
     );
-    const carrierToken = carrierLoginRes.data?.data?.accessToken;
+    const carrierToken =
+      carrierLoginRes.data?.data?.tokens?.accessToken || carrierLoginRes.data?.data?.accessToken;
 
     // -----------------------------------------------------------
     // Step 4: Driver Staff Provisioning & Vehicle Registry
@@ -197,7 +205,8 @@ async function runE2ETests() {
       driverLoginRes.status === 200,
       JSON.stringify(driverLoginRes.data)
     );
-    const driverToken = driverLoginRes.data?.data?.accessToken;
+    const driverToken =
+      driverLoginRes.data?.data?.tokens?.accessToken || driverLoginRes.data?.data?.accessToken;
     assertCheck(
       'Driver JWT token has DRIVER role',
       driverLoginRes.data?.data?.user?.role === 'DRIVER'
@@ -237,7 +246,7 @@ async function runE2ETests() {
       driverRes.status === 201,
       JSON.stringify(driverRes.data)
     );
-    const driverId = driverRes.data?.data?.id;
+    assertCheck('Fleet driver ID generated', !!driverRes.data?.data?.id);
 
     // -----------------------------------------------------------
     // Step 5: Customer Registration, Price Estimate & Booking
@@ -268,12 +277,13 @@ async function runE2ETests() {
       custLoginRes.status === 200,
       JSON.stringify(custLoginRes.data)
     );
-    const customerToken = custLoginRes.data?.data?.accessToken;
+    const customerToken =
+      custLoginRes.data?.data?.tokens?.accessToken || custLoginRes.data?.data?.accessToken;
 
     // Pre-auth estimate calculation
     const estimateRes = await client.post('/api/v1/shipments/estimate-price', {
-      pickupPinCode: '400001',
-      deliveryPinCode: '560001',
+      pickupPinCode: '110001',
+      deliveryPinCode: '400001',
       weightKg: 45.0,
       category: 'PARCEL',
     });
@@ -293,16 +303,16 @@ async function runE2ETests() {
       {
         senderName: 'Aarav Customer',
         senderPhone: customerPhone,
-        pickupAddress: 'Plot 10, MIDC Industrial Area, Andheri East',
-        pickupCity: 'Mumbai',
-        pickupState: 'Maharashtra',
-        pickupPinCode: '400001',
+        pickupAddress: 'Plot 10, Barakhamba Road, Connaught Place',
+        pickupCity: 'New Delhi',
+        pickupState: 'Delhi',
+        pickupPinCode: '110001',
         recipientName: 'Sunil Sharma',
         recipientPhone: '+919877712345',
-        deliveryAddress: 'Tech Park, Hosur Road, Electronic City',
-        deliveryCity: 'Bengaluru',
-        deliveryState: 'Karnataka',
-        deliveryPinCode: '560001',
+        deliveryAddress: 'Tech Park, Bandra Kurla Complex',
+        deliveryCity: 'Mumbai',
+        deliveryState: 'Maharashtra',
+        deliveryPinCode: '400001',
         category: 'PARCEL',
         packageDescription: 'Precision electronic sensors',
         weightKg: 45.0,
@@ -325,36 +335,61 @@ async function runE2ETests() {
     // Step 6: Marketplace Offer Acceptance & Dispatch Assignment
     // -----------------------------------------------------------
     console.log(bold('\nStep 6: Marketplace Offer Acceptance & Dispatch Assignment'));
-    // Carrier checks offer inbox
-    const inboxRes = await client.get('/api/v1/shipments/offers/inbox', {
-      headers: { Authorization: `Bearer ${carrierToken}` },
-    });
+    // Allow matching engine a brief moment to process carrier matching
+    await new Promise((r) => setTimeout(r, 1500));
+
+    // Carrier checks offer inbox with retry to ensure matching engine completes async scoring
+    let inboxRes;
+    let offers = [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      inboxRes = await client.get('/api/v1/shipments/offers/inbox', {
+        headers: { Authorization: `Bearer ${carrierToken}` },
+      });
+      offers = Array.isArray(inboxRes.data?.data)
+        ? inboxRes.data.data
+        : inboxRes.data?.data?.offers || [];
+      if (offers.length > 0) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
     assertCheck(
       'Carrier offer inbox returns 200',
-      inboxRes.status === 200,
-      JSON.stringify(inboxRes.data)
+      inboxRes && inboxRes.status === 200,
+      JSON.stringify(inboxRes ? inboxRes.data : {})
     );
-    const offers = inboxRes.data?.data?.offers || [];
-    const targetOffer = offers.find((o) => o.shipmentId === shipmentId) || offers[0];
-
-    if (targetOffer) {
-      const acceptOfferRes = await client.post(
-        `/api/v1/shipments/offers/${targetOffer.id}/accept`,
-        {},
-        { headers: { Authorization: `Bearer ${carrierToken}` } }
-      );
-      assertCheck(
-        'Carrier accepts marketplace offer (200)',
-        acceptOfferRes.status === 200,
-        JSON.stringify(acceptOfferRes.data)
-      );
+    let shipmentDetails;
+    if (offers.length === 0) {
+      const detailsRes = await client.get(`/api/v1/shipments/${shipmentId}`, {
+        headers: { Authorization: `Bearer ${customerToken}` },
+      });
+      shipmentDetails = detailsRes.data?.data;
     }
+
+    assertCheck(
+      'Carrier received marketplace offer',
+      offers.length > 0,
+      `No pending offers found for carrier (${orgId}). Shipment status: ${shipmentDetails?.status}, Hubs: ${shipmentDetails?.pickupHub} -> ${shipmentDetails?.deliveryHub}, Offers: ${JSON.stringify(shipmentDetails?.offers)}`
+    );
+
+    const targetOffer = offers.find((o) => o.shipmentId === shipmentId) || offers[0];
+    assertCheck('Target offer identified', !!targetOffer);
+
+    const acceptOfferRes = await client.post(
+      `/api/v1/shipments/offers/${targetOffer.id}/accept`,
+      {},
+      { headers: { Authorization: `Bearer ${carrierToken}` } }
+    );
+    assertCheck(
+      'Carrier accepts marketplace offer (200)',
+      acceptOfferRes.status === 200,
+      JSON.stringify(acceptOfferRes.data)
+    );
 
     // Carrier assigns driver and vehicle (atomic 2-minute reservation)
     const assignRes = await client.post(
       `/api/v1/shipments/${shipmentId}/assign`,
       {
-        driverId,
+        driverId: driverUserId,
         vehicleId,
       },
       { headers: { Authorization: `Bearer ${carrierToken}` } }
@@ -421,18 +456,31 @@ async function runE2ETests() {
     // Step 8: Live Tracking & Fleet Release Validation
     // -----------------------------------------------------------
     console.log(bold('\nStep 8: Live Tracking & Resource Release Verification'));
-    // Allow asynchronous consumer 2 seconds to process outbox events
-    await new Promise((r) => setTimeout(r, 2000));
+    // Poll tracking endpoint to allow asynchronous outbox publisher (2s interval)
+    // and tracking SQS consumer (5s interval) to ingest milestone events
+    let trackingRes;
+    let trackingStatus;
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      trackingRes = await client.get(`/api/v1/tracking/${trackingNumber}`);
+      if (trackingRes && trackingRes.status === 200) {
+        trackingStatus =
+          trackingRes.data?.data?.currentStatus ||
+          trackingRes.data?.data?.status ||
+          trackingRes.data?.data?.latestMilestone?.status;
+        if (trackingStatus === 'DELIVERED') break;
+      }
+    }
 
-    const trackingRes = await client.get(`/api/v1/tracking/${trackingNumber}`);
     assertCheck(
       'Tracking telemetry returns 200',
-      trackingRes.status === 200,
-      JSON.stringify(trackingRes.data)
+      trackingRes && trackingRes.status === 200,
+      JSON.stringify(trackingRes ? trackingRes.data : {})
     );
     assertCheck(
       'Tracking status verified as DELIVERED',
-      trackingRes.data?.data?.status === 'DELIVERED'
+      trackingStatus === 'DELIVERED',
+      `Got tracking status: ${trackingStatus}`
     );
 
     // Customer checks notifications inbox

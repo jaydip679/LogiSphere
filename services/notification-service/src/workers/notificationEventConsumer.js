@@ -202,7 +202,9 @@ class NotificationEventConsumer {
   }
 
   async handleDomainEvent(event) {
-    const { id: eventId, type, payload } = event;
+    const eventId = event.id || event.eventId;
+    const type = event.type || event.eventType;
+    const payload = event.payload;
     if (!eventId || !type || !payload) {
       logger.warn('Skipping malformed domain event in notification consumer', { event });
       return false;

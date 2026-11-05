@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install openssl for Prisma engine detection on Alpine Linux
+RUN apk add --no-cache openssl
+
 # Copy root workspace manifests
 COPY package.json package-lock.json ./
 COPY services/shipment-service/package.json ./services/shipment-service/
@@ -29,6 +32,9 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5002
+
+# Install openssl runtime library required by Prisma on Alpine Linux
+RUN apk add --no-cache openssl
 
 # Create temp reports directory with correct ownership
 RUN mkdir -p /app/services/shipment-service/temp_reports && chown -R node:node /app

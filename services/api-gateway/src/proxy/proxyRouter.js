@@ -11,6 +11,7 @@ const createServiceProxy = (targetUrl) => {
   return createProxyMiddleware({
     target: targetUrl,
     changeOrigin: true,
+    pathRewrite: (path, req) => req.originalUrl,
     on: {
       proxyReq: (proxyReq, req) => {
         if (req.correlationId) {

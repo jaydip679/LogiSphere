@@ -64,7 +64,9 @@ class OutboxPublisherWorker {
           const queueUrl = `${config.sqs.endpoint}/000000000000/${queueName}`;
 
           const messageBody = JSON.stringify({
+            id: evt.eventId,
             eventId: evt.eventId,
+            type: evt.eventType,
             eventType: evt.eventType,
             aggregateId: evt.aggregateId,
             timestamp: evt.createdAt,
