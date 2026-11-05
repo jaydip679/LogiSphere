@@ -90,6 +90,53 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
+  const verifyOtp = async (email, otp, purpose = 'REGISTRATION') => {
+    const response = await apiClient.post('/api/v1/auth/verify-otp', {
+      email: email.trim().toLowerCase(),
+      otp: otp.trim(),
+      purpose,
+    });
+
+    const payload = response.data?.data;
+    if (payload?.tokens && payload?.user) {
+      const { user: authUser, tokens } = payload;
+      if (tokens.accessToken) {
+        localStorage.setItem('logisphere_access_token', tokens.accessToken);
+      }
+      if (tokens.refreshToken) {
+        localStorage.setItem('logisphere_refresh_token', tokens.refreshToken);
+      }
+      localStorage.setItem('logisphere_user', JSON.stringify(authUser));
+      setUser(authUser);
+    }
+
+    return response.data;
+  };
+
+  const resendOtp = async (email, purpose = 'REGISTRATION') => {
+    const response = await apiClient.post('/api/v1/auth/resend-otp', {
+      email: email.trim().toLowerCase(),
+      purpose,
+    });
+    return response.data;
+  };
+
+  const requestPasswordReset = async (email) => {
+    const response = await apiClient.post('/api/v1/auth/forgot-password', {
+      email: email.trim().toLowerCase(),
+    });
+    return response.data;
+  };
+
+  const resetPassword = async (email, otp, newPassword) => {
+    const response = await apiClient.post('/api/v1/auth/reset-password', {
+      email: email.trim().toLowerCase(),
+      otp: otp.trim(),
+      newPassword,
+    });
+    return response.data;
+  };
+
   const logout = async () => {
     try {
       const refreshToken = localStorage.getItem('logisphere_refresh_token');
@@ -129,6 +176,10 @@ export function AuthProvider({ children }) {
     login,
     registerCustomer,
     registerCompany,
+    verifyOtp,
+    resendOtp,
+    requestPasswordReset,
+    resetPassword,
     logout,
     getDefaultPortalRoute,
   };

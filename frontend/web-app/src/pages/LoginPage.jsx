@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import Logo from '../components/common/Logo';
 import Button from '../components/common/Button';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isUnverified, setIsUnverified] = useState(false);
   const { login, getDefaultPortalRoute } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -21,6 +22,7 @@ export default function LoginPage() {
       return;
     }
     setError('');
+    setIsUnverified(false);
     setLoading(true);
 
     try {
@@ -29,11 +31,16 @@ export default function LoginPage() {
       const targetPath = location.state?.from?.pathname || getDefaultPortalRoute(user.role);
       navigate(targetPath, { replace: true });
     } catch (err) {
+      const errorCode = err.response?.data?.error?.code;
       const errorMessage =
         err.response?.data?.message ||
         err.response?.data?.error?.message ||
         err.message ||
         'Authentication failed. Please verify your credentials.';
+
+      if (errorCode === 'EMAIL_NOT_VERIFIED') {
+        setIsUnverified(true);
+      }
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -57,9 +64,23 @@ export default function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-card rounded-2xl border border-slate-200/90 sm:px-10">
           {error && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
+            <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-xl space-y-2 text-xs text-rose-700">
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>Authentication Required</span>
+              </div>
+              <p className="text-rose-600 leading-relaxed">{error}</p>
+              {isUnverified && (
+                <div className="pt-2 border-t border-rose-200/80">
+                  <Link
+                    to={`/register?step=verify&email=${encodeURIComponent(email)}`}
+                    className="inline-flex items-center gap-1.5 font-bold text-brand-700 hover:text-brand-800 bg-white px-3 py-1.5 rounded-lg border border-brand-200 shadow-2xs transition-all"
+                  >
+                    <span>Enter Verification Code</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              )}
             </div>
           )}
 
@@ -104,30 +125,29 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="md"
-              disabled={loading}
-              className="w-full mt-2"
-              icon={ArrowRight}
-            >
-              {loading ? 'Authenticating...' : 'Sign In'}
-            </Button>
+            <div className="pt-2">
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                loading={loading}
+                className="w-full flex items-center justify-center gap-2"
+              >
+                <span>Sign In to Portal</span>
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-2">
-            <p className="text-xs text-slate-600">
-              Don't have an account?{' '}
+          <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col gap-2 text-center text-xs text-slate-600">
+            <p>
+              New to LogiSphere?{' '}
               <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-                Register here
+                Create an account
               </Link>
             </p>
-            <p className="text-xs text-slate-500">
-              Looking to track a consignment?{' '}
-              <Link to="/track" className="font-semibold text-slate-700 hover:text-navy-900">
-                Public Tracking
-              </Link>
+            <p className="text-[11px] text-slate-400">
+              Company staff & drivers use system-provisioned credentials.
             </p>
           </div>
         </div>
