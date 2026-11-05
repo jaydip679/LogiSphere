@@ -89,6 +89,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=auth
       INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL_INTERNAL:-http://notification-service:5005}
       JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
       JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
     volumes:
@@ -226,6 +227,12 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-LogiSphere Notifications <notifications@logisphere.local>}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-auto}
+      EMAIL_FROM: ${EMAIL_FROM:-LogiSphere Notifications <notifications@logisphere.local>}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GMAIL_REFRESH_TOKEN: ${GMAIL_REFRESH_TOKEN:-}
+      GMAIL_USER_EMAIL: ${GMAIL_USER_EMAIL:-}
     networks:
       - logisphere_network
     depends_on:

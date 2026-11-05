@@ -30,8 +30,9 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Mount routes
+// Mount routes (supporting both standard and versioned internal paths)
 app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/internal', internalRoutes);
 app.use('/internal', internalRoutes);
 
 // Centralized error handling

@@ -47,6 +47,21 @@ const config = {
     pass: process.env.SMTP_PASS || '',
     from: process.env.SMTP_FROM || 'LogiSphere Notifications <notifications@logisphere.local>',
   },
+  gmail: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    refreshToken: process.env.GMAIL_REFRESH_TOKEN || '',
+    userEmail: process.env.GMAIL_USER_EMAIL || '',
+  },
+  email: {
+    provider: (process.env.EMAIL_PROVIDER || 'auto').toLowerCase(),
+    from:
+      process.env.EMAIL_FROM ||
+      process.env.SMTP_FROM ||
+      (process.env.GMAIL_USER_EMAIL
+        ? `LogiSphere Notifications <${process.env.GMAIL_USER_EMAIL}>`
+        : 'LogiSphere Notifications <notifications@logisphere.local>'),
+  },
 };
 
 module.exports = config;
