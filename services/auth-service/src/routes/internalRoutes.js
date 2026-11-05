@@ -8,5 +8,6 @@ router.use(requireInternalServiceKey);
 
 router.get('/organizations/coverage', internalController.getCoverage);
 router.get('/organizations/:id', internalController.getOrganization);
+router.post('/users/verify-email', internalController.verifyUserEmail);
 
 module.exports = router;

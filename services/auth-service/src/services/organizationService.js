@@ -3,6 +3,7 @@ const userRepository = require('../repositories/userRepository');
 const organizationRepository = require('../repositories/organizationRepository');
 const tokenRepository = require('../repositories/tokenRepository');
 const auditRepository = require('../repositories/auditRepository');
+const otpService = require('./otpService');
 const { hashPassword } = require('../utils/passwordUtils');
 const { generateAccessToken, generateRefreshToken } = require('../utils/tokenUtils');
 const { ConflictError, NotFoundError, ValidationError } = require('@logisphere/common-utils');
@@ -12,10 +13,12 @@ class OrganizationService {
   async registerCompany(data) {
     const existingUser = await userRepository.findByEmail(data.ownerEmail);
     if (existingUser) {
-      throw new ConflictError(
-        'An account with the owner email already exists',
-        'OWNER_EMAIL_ALREADY_EXISTS'
-      );
+      if (existingUser.isEmailVerified) {
+        throw new ConflictError(
+          'An account with the owner email already exists',
+          'OWNER_EMAIL_ALREADY_EXISTS'
+        );
+      }
     }
 
     const passwordHash = await hashPassword(data.ownerPassword);
@@ -35,7 +38,7 @@ class OrganizationService {
         tx
       );
 
-      // 2. Create Owner User
+      // 2. Create Owner User (isEmailVerified starts as false)
       const owner = await userRepository.createUser(
         {
           email: data.ownerEmail,
@@ -43,6 +46,8 @@ class OrganizationService {
           fullName: data.ownerFullName,
           phone: data.ownerPhone || null,
           role: 'COMPANY_OWNER',
+          isEmailVerified: false,
+          isActive: true,
         },
         tx
       );
@@ -66,16 +71,8 @@ class OrganizationService {
       return { org, owner };
     });
 
-    // Generate token allowing owner to log in and inspect pending review status
-    const accessToken = generateAccessToken({
-      sub: result.owner.id,
-      email: result.owner.email,
-      role: result.owner.role,
-      organizationId: result.org.id,
-    });
-
-    const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
-    await tokenRepository.saveRefreshToken(result.owner.id, tokenHash, expiresAt);
+    // 5. Generate and dispatch secure 6-digit OTP to owner
+    await otpService.generateAndSendOtp(result.owner.email, 'REGISTRATION', result.owner.fullName);
 
     return {
       organization: {
@@ -89,11 +86,11 @@ class OrganizationService {
         email: result.owner.email,
         fullName: result.owner.fullName,
         role: result.owner.role,
+        isEmailVerified: false,
       },
-      tokens: {
-        accessToken,
-        refreshToken: rawToken,
-      },
+      requiresVerification: true,
+      message:
+        'Company registration initiated. A 6-digit verification code has been sent to your email to verify account ownership.',
     };
   }
 
@@ -167,6 +164,8 @@ class OrganizationService {
           phone: staffData.phone || null,
           role: staffData.role,
           mustChangePassword: true,
+          isEmailVerified: true, // Company provisioned staff are pre-verified
+          isActive: true,
         },
         tx
       );

@@ -155,13 +155,32 @@ async function runE2ETests() {
       approveRes.data?.data?.status === 'APPROVED' || approveRes.data?.data?.status === 'ACTIVE'
     );
 
-    // Carrier logs in
+    // Verify unverified carrier login is rejected
+    const unverifiedCarrierLogin = await client.post('/api/v1/auth/login', {
+      email: companyEmail,
+      password: 'CarrierSecure2026!',
+    });
+    assertCheck(
+      'Unverified carrier login rejected (401 EMAIL_NOT_VERIFIED)',
+      unverifiedCarrierLogin.status === 401 && unverifiedCarrierLogin.data?.error?.code === 'EMAIL_NOT_VERIFIED',
+      JSON.stringify(unverifiedCarrierLogin.data)
+    );
+
+    // Verify carrier email
+    const authServiceDirectUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
+    await axios.post(
+      `${authServiceDirectUrl}/api/v1/internal/users/verify-email`,
+      { email: companyEmail },
+      { headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY } }
+    );
+
+    // Carrier logs in after email verification
     const carrierLoginRes = await client.post('/api/v1/auth/login', {
       email: companyEmail,
       password: 'CarrierSecure2026!',
     });
     assertCheck(
-      'Carrier login returns 200',
+      'Carrier login returns 200 after verification',
       carrierLoginRes.status === 200,
       JSON.stringify(carrierLoginRes.data)
     );
@@ -268,12 +287,30 @@ async function runE2ETests() {
       JSON.stringify(regCustRes.data)
     );
 
+    // Verify unverified customer login is rejected
+    const unverifiedCustLogin = await client.post('/api/v1/auth/login', {
+      email: customerEmail,
+      password: 'CustomerPass2026!',
+    });
+    assertCheck(
+      'Unverified customer login rejected (401 EMAIL_NOT_VERIFIED)',
+      unverifiedCustLogin.status === 401 && unverifiedCustLogin.data?.error?.code === 'EMAIL_NOT_VERIFIED',
+      JSON.stringify(unverifiedCustLogin.data)
+    );
+
+    // Verify customer email
+    await axios.post(
+      `${authServiceDirectUrl}/api/v1/internal/users/verify-email`,
+      { email: customerEmail },
+      { headers: { 'x-internal-service-key': process.env.INTERNAL_SERVICE_KEY } }
+    );
+
     const custLoginRes = await client.post('/api/v1/auth/login', {
       email: customerEmail,
       password: 'CustomerPass2026!',
     });
     assertCheck(
-      'Customer login returns 200',
+      'Customer login returns 200 after verification',
       custLoginRes.status === 200,
       JSON.stringify(custLoginRes.data)
     );

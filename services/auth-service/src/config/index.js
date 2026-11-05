@@ -46,6 +46,7 @@ const config = {
     algorithm: 'RS256',
   },
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || 'dev_internal_secret_key',
+  notificationServiceUrl: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:5005',
   adminBootstrap: {
     email: process.env.ADMIN_EMAIL || 'admin@logisphere.local',
     password: process.env.ADMIN_INITIAL_PASSWORD || 'AdminSecurePassword123!',

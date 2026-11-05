@@ -74,6 +74,31 @@ const reviewCompanySchema = z
     }
   );
 
+const verifyOtpSchema = z.object({
+  email: z.string().email('Valid email is required').toLowerCase().trim(),
+  otp: z.string().min(6, 'Verification code must be 6 digits').max(6, 'Verification code must be 6 digits').trim(),
+  purpose: z.enum(['REGISTRATION', 'PASSWORD_RESET']).default('REGISTRATION'),
+});
+
+const resendOtpSchema = z.object({
+  email: z.string().email('Valid email is required').toLowerCase().trim(),
+  purpose: z.enum(['REGISTRATION', 'PASSWORD_RESET']).default('REGISTRATION'),
+});
+
+const requestPasswordResetSchema = z.object({
+  email: z.string().email('Valid email is required').toLowerCase().trim(),
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email('Valid email is required').toLowerCase().trim(),
+  otp: z.string().min(6, 'Verification code must be 6 digits').max(6, 'Verification code must be 6 digits').trim(),
+  newPassword: z
+    .string()
+    .min(8, 'Password must be at least 8 characters long')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+});
+
 module.exports = {
   loginSchema,
   customerRegistrationSchema,
@@ -81,4 +106,8 @@ module.exports = {
   createStaffSchema,
   changePasswordSchema,
   reviewCompanySchema,
+  verifyOtpSchema,
+  resendOtpSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
 };

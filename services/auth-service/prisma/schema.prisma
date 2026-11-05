@@ -48,6 +48,7 @@ model User {
   taxIdentifier      String?
   mustChangePassword Boolean      @default(false)
   isActive           Boolean      @default(true)
+  isEmailVerified    Boolean      @default(false)
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
@@ -55,6 +56,21 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 
+  @@schema("auth")
+}
+
+model EmailOtp {
+  id          String    @id @default(uuid())
+  email       String
+  otpHash     String
+  purpose     String    @default("REGISTRATION")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([email, purpose])
   @@schema("auth")
 }
 

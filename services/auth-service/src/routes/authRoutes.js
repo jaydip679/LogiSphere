@@ -6,6 +6,10 @@ const {
   loginSchema,
   customerRegistrationSchema,
   changePasswordSchema,
+  verifyOtpSchema,
+  resendOtpSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
 } = require('../validators/authValidators');
 const { authenticate } = require('../middlewares/authMiddleware');
 
@@ -40,17 +44,63 @@ const registrationLimiter = rateLimit({
   statusCode: HttpStatus.TOO_MANY_REQUESTS,
 });
 
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isTestEnv ? 1000 : 15, // 15 OTP attempts per 15 minutes
+  message: {
+    success: false,
+    message: 'Too many verification attempts. Please wait before trying again.',
+    error: { code: 'RATE_LIMIT_EXCEEDED' },
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  statusCode: HttpStatus.TOO_MANY_REQUESTS,
+});
+
+// 1. Registration
 router.post(
   '/register/customer',
   registrationLimiter,
   validate(customerRegistrationSchema),
   authController.registerCustomer
 );
+
+// 2. Email OTP Verification & Resend
+router.post(
+  '/verify-otp',
+  otpLimiter,
+  validate(verifyOtpSchema),
+  authController.verifyOtp
+);
+
+router.post(
+  '/resend-otp',
+  otpLimiter,
+  validate(resendOtpSchema),
+  authController.resendOtp
+);
+
+// 3. Password Reset Workflow
+router.post(
+  '/forgot-password',
+  otpLimiter,
+  validate(requestPasswordResetSchema),
+  authController.requestPasswordReset
+);
+
+router.post(
+  '/reset-password',
+  otpLimiter,
+  validate(resetPasswordSchema),
+  authController.resetPassword
+);
+
+// 4. Session & Token Authentication
 router.post('/login', authLimiter, validate(loginSchema), authController.login);
 router.post('/refresh', authLimiter, authController.refresh);
 router.post('/logout', authController.logout);
 
-// Protected routes
+// 5. Protected routes
 router.get('/profile', authenticate, authController.getProfile);
 router.post(
   '/change-password',

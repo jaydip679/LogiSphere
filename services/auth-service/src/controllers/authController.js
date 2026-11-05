@@ -5,7 +5,47 @@ class AuthController {
   async registerCustomer(req, res, next) {
     try {
       const result = await authService.registerCustomer(req.body);
-      return sendSuccess(res, 'Customer registered successfully', result, HttpStatus.CREATED);
+      return sendSuccess(res, 'Customer registration initiated. Please verify your email.', result, HttpStatus.CREATED);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async verifyOtp(req, res, next) {
+    try {
+      const { email, otp, purpose } = req.body;
+      const result = await authService.verifyOtp(email, otp, purpose || 'REGISTRATION');
+      return sendSuccess(res, result.message, result, HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resendOtp(req, res, next) {
+    try {
+      const { email, purpose } = req.body;
+      const result = await authService.resendOtp(email, purpose || 'REGISTRATION');
+      return sendSuccess(res, result.message, result, HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async requestPasswordReset(req, res, next) {
+    try {
+      const { email } = req.body;
+      const result = await authService.requestPasswordReset(email);
+      return sendSuccess(res, result.message, null, HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req, res, next) {
+    try {
+      const { email, otp, newPassword } = req.body;
+      const result = await authService.resetPassword(email, otp, newPassword);
+      return sendSuccess(res, result.message, null, HttpStatus.OK);
     } catch (error) {
       next(error);
     }
