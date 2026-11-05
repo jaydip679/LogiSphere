@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install native build tools for compiling native dependencies like bcrypt
+RUN apk add --no-cache python3 make g++
+
 # Copy root workspace manifests
 COPY package.json package-lock.json ./
 COPY services/auth-service/package.json ./services/auth-service/
