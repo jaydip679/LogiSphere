@@ -6,13 +6,21 @@ npm-debug.log
 docs
 coverage
 dist
+
+# Environment files in root and all subdirectories
 .env
-.env.local
-.env.*.local
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
 *.log
 
 # Sensitive secrets (Must be mounted or passed via environment, never baked in)
 services/auth-service/secrets/jwt-private.key
+*private*.key
+**/secrets/*
+!**/secrets/.gitkeep
 
 # Temporary reports
 services/shipment-service/temp_reports
+storage/

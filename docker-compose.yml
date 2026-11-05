@@ -9,17 +9,17 @@ services:
     container_name: logisphere-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: logisphere
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-logisphere}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - logisphere_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d logisphere"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-logisphere}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -35,8 +35,8 @@ services:
       - "4566:4566"
     environment:
       SERVICES: sqs
-      AWS_DEFAULT_REGION: ap-south-1
-      DEFAULT_REGION: ap-south-1
+      AWS_DEFAULT_REGION: ${AWS_REGION:-ap-south-1}
+      DEFAULT_REGION: ${AWS_REGION:-ap-south-1}
     volumes:
       - ./docker/localstack/init-queues.sh:/etc/localstack/init/ready.d/init-queues.sh:ro
       - /var/run/docker.sock:/var/run/docker.sock
@@ -58,15 +58,15 @@ services:
     container_name: logisphere-db-migrate
     restart: "no"
     environment:
-      DATABASE_URL_AUTH: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
-      DATABASE_URL_SHIPMENT: postgresql://postgres:postgres@postgres:5432/logisphere?schema=shipment
-      DATABASE_URL_FLEET: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
-      DATABASE_URL_TRACKING: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
-      DATABASE_URL_NOTIFICATION: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
-      ADMIN_EMAIL: admin@logisphere.local
-      ADMIN_INITIAL_PASSWORD: AdminSecurePassword123!
-      ADMIN_FULL_NAME: Platform Administrator
+      DATABASE_URL_AUTH: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=auth
+      DATABASE_URL_SHIPMENT: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=shipment
+      DATABASE_URL_FLEET: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=fleet
+      DATABASE_URL_TRACKING: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=tracking
+      DATABASE_URL_NOTIFICATION: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=notification
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=auth
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@logisphere.local}
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-AdminSecurePassword123!}
+      ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-Platform Administrator}
     networks:
       - logisphere_network
     depends_on:
@@ -83,14 +83,14 @@ services:
     container_name: logisphere-auth-service
     restart: unless-stopped
     ports:
-      - "5001:5001"
+      - "${AUTH_SERVICE_PORT:-5001}:5001"
     environment:
       PORT: 5001
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=auth
-      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
-      JWT_ACCESS_EXPIRY: 15m
-      JWT_REFRESH_EXPIRY: 7d
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=auth
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
+      JWT_ACCESS_EXPIRY: ${JWT_ACCESS_EXPIRY:-15m}
+      JWT_REFRESH_EXPIRY: ${JWT_REFRESH_EXPIRY:-7d}
     volumes:
       - ./services/auth-service/secrets/jwt-private.key:/app/services/auth-service/secrets/jwt-private.key:ro
       - ./shared/keys/jwt-public.key:/app/shared/keys/jwt-public.key:ro
@@ -112,18 +112,18 @@ services:
     container_name: logisphere-shipment-service
     restart: unless-stopped
     ports:
-      - "5002:5002"
+      - "${SHIPMENT_SERVICE_PORT:-5002}:5002"
     environment:
       PORT: 5002
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=shipment
-      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=shipment
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
       AUTH_SERVICE_URL: http://auth-service:5001
       FLEET_SERVICE_URL: http://fleet-dispatch-service:5003
-      AWS_REGION: ap-south-1
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
       SQS_ENDPOINT: http://localstack:4566
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       TEMP_REPORT_DIR: /app/services/shipment-service/temp_reports
     volumes:
       - reports_data:/app/services/shipment-service/temp_reports
@@ -147,16 +147,16 @@ services:
     container_name: logisphere-fleet-dispatch-service
     restart: unless-stopped
     ports:
-      - "5003:5003"
+      - "${FLEET_SERVICE_PORT:-5003}:5003"
     environment:
       PORT: 5003
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=fleet
-      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
-      AWS_REGION: ap-south-1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=fleet
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
       SQS_ENDPOINT: http://localstack:4566
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       FLEET_QUEUE_URL: http://localstack:4566/000000000000/logisphere-fleet-queue
     networks:
       - logisphere_network
@@ -178,16 +178,16 @@ services:
     container_name: logisphere-tracking-service
     restart: unless-stopped
     ports:
-      - "5004:5004"
+      - "${TRACKING_SERVICE_PORT:-5004}:5004"
     environment:
       PORT: 5004
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=tracking
-      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
-      AWS_REGION: ap-south-1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=tracking
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
       SQS_ENDPOINT: http://localstack:4566
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       TRACKING_QUEUE_URL: http://localstack:4566/000000000000/logisphere-tracking-queue
     networks:
       - logisphere_network
@@ -209,18 +209,23 @@ services:
     container_name: logisphere-notification-service
     restart: unless-stopped
     ports:
-      - "5005:5005"
+      - "${NOTIFICATION_SERVICE_PORT:-5005}:5005"
     environment:
       PORT: 5005
       NODE_ENV: production
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/logisphere?schema=notification
-      INTERNAL_SERVICE_KEY: logisphere_secret_key_2026
-      AWS_REGION: ap-south-1
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD_ENCODED:-${POSTGRES_PASSWORD:-postgres}}@postgres:5432/${POSTGRES_DB:-logisphere}?schema=notification
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-logisphere_secret_key_2026}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
       SQS_ENDPOINT: http://localstack:4566
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       NOTIFICATION_QUEUE_URL: http://localstack:4566/000000000000/logisphere-notification-queue
       NOTIFICATION_DLQ_URL: http://localstack:4566/000000000000/logisphere-notification-dlq
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-LogiSphere Notifications <notifications@logisphere.local>}
     networks:
       - logisphere_network
     depends_on:
@@ -241,7 +246,7 @@ services:
     container_name: logisphere-api-gateway
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "${API_GATEWAY_PORT:-5000}:5000"
     environment:
       PORT: 5000
       NODE_ENV: production
@@ -250,7 +255,7 @@ services:
       FLEET_SERVICE_URL: http://fleet-dispatch-service:5003
       TRACKING_SERVICE_URL: http://tracking-service:5004
       NOTIFICATION_SERVICE_URL: http://notification-service:5005
-      CORS_ORIGIN: http://localhost:3000,http://localhost:5000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:5000}
     networks:
       - logisphere_network
     depends_on:
@@ -275,7 +280,7 @@ services:
     container_name: logisphere-web-app
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${WEB_APP_PORT:-3000}:3000"
     networks:
       - logisphere_network
     depends_on:
