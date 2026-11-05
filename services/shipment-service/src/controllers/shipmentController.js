@@ -29,13 +29,28 @@ class ShipmentController {
       const status = req.query.status || null;
       const skip = (page - 1) * limit;
 
-      const result = await shipmentRepository.findByCustomer(req.user.id, {
-        skip,
-        take: limit,
-        status,
-      });
+      let result;
+      if (['COMPANY_OWNER', 'LOGISTICS_MANAGER', 'DISPATCHER'].includes(req.user.role)) {
+        result = await shipmentRepository.findByAssignedOrg(req.user.organizationId, {
+          skip,
+          take: limit,
+          status,
+        });
+      } else if (req.user.role === 'PLATFORM_ADMIN') {
+        result = await shipmentRepository.findAll({
+          skip,
+          take: limit,
+          status,
+        });
+      } else {
+        result = await shipmentRepository.findByCustomer(req.user.id, {
+          skip,
+          take: limit,
+          status,
+        });
+      }
 
-      return sendSuccess(res, 'Customer shipments retrieved', result, HttpStatus.OK);
+      return sendSuccess(res, 'Shipments retrieved', result, HttpStatus.OK);
     } catch (error) {
       next(error);
     }

@@ -71,6 +71,23 @@ class ShipmentRepository {
     return { total, items };
   }
 
+  async findAll({ skip = 0, take = 20, status = null } = {}) {
+    const where = {};
+    if (status) where.status = status;
+
+    const [total, items] = await Promise.all([
+      prisma.shipment.count({ where }),
+      prisma.shipment.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return { total, items };
+  }
+
   async findByDriver(assignedDriverId, statusList = []) {
     const where = { assignedDriverId };
     if (statusList.length > 0) {

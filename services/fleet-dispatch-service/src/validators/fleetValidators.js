@@ -1,16 +1,10 @@
 const { z } = require('zod');
 
-const indianPhoneRegex = /^(?:\+91|91)?[6-9]\d{9}$/;
 const registrationNumberRegex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$/i;
 
 const createDriverSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  phone: z
-    .string()
-    .regex(
-      indianPhoneRegex,
-      'Invalid Indian phone number format (+91 or 10 digits starting with 6-9)'
-    ),
+  phone: z.string().optional().default(''),
   licenseNumber: z
     .string()
     .min(5, 'Driving license number must be at least 5 characters')

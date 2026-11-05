@@ -1,7 +1,5 @@
 const { z } = require('zod');
 
-const indianPhoneRegex = /^(\+91[-\s]?)?[6789]\d{9}$/;
-
 const loginSchema = z.object({
   email: z.string().email('Valid email address is required').toLowerCase().trim(),
   password: z.string().min(1, 'Password is required'),
@@ -15,7 +13,7 @@ const customerRegistrationSchema = z.object({
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
   fullName: z.string().min(2, 'Full name is required').trim(),
-  phone: z.string().regex(indianPhoneRegex, 'Valid 10-digit Indian phone number is required'),
+  phone: z.string().optional().default(''),
   accountType: z.enum(['INDIVIDUAL', 'BUSINESS']).default('INDIVIDUAL'),
   businessName: z.string().optional(),
   taxIdentifier: z.string().optional(),
@@ -25,7 +23,7 @@ const companyRegistrationSchema = z.object({
   name: z.string().min(2, 'Company name is required').trim(),
   registrationNumber: z.string().optional(),
   contactEmail: z.string().email('Valid contact email is required').toLowerCase().trim(),
-  contactPhone: z.string().regex(indianPhoneRegex, 'Valid Indian phone number is required'),
+  contactPhone: z.string().optional().default(''),
   serviceAreas: z.array(z.string()).min(1, 'At least one service area hub is required'),
   supportedCategories: z.array(z.string()).default(['PARCEL', 'DOCUMENT', 'CORPORATE']),
   ownerFullName: z.string().min(2, 'Owner full name is required').trim(),
@@ -35,13 +33,13 @@ const companyRegistrationSchema = z.object({
     .min(8, 'Password must be at least 8 characters long')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
-  ownerPhone: z.string().regex(indianPhoneRegex, 'Valid Indian phone number is required'),
+  ownerPhone: z.string().optional().default(''),
 });
 
 const createStaffSchema = z.object({
   fullName: z.string().min(2, 'Full name is required').trim(),
   email: z.string().email('Valid email is required').toLowerCase().trim(),
-  phone: z.string().regex(indianPhoneRegex, 'Valid Indian phone number is required'),
+  phone: z.string().optional().default(''),
   role: z.enum(['LOGISTICS_MANAGER', 'DISPATCHER', 'DRIVER']),
   licenseNumber: z.string().optional(),
 });

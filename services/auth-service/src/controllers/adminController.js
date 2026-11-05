@@ -13,6 +13,18 @@ class AdminController {
     }
   }
 
+  async getAllOrganizations(req, res, next) {
+    try {
+      const page = parseInt(req.query.page, 10) || 1;
+      const limit = parseInt(req.query.limit, 10) || 50;
+      const status = req.query.status || null;
+      const result = await organizationService.getAllOrganizations(page, limit, status);
+      return sendSuccess(res, 'Organizations retrieved', result, HttpStatus.OK);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async reviewOrganization(req, res, next) {
     try {
       const { id } = req.params;

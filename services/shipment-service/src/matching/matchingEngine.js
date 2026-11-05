@@ -95,10 +95,15 @@ class MatchingEngine {
         })
       );
 
-      // 4. Sort descending by score. Deterministic tie-breaker: sort by organizationId ascending (alphabetical UUID)
+      // 4. Sort descending by score. Tie-breaker: most recently registered carrier first (createdAt desc)
       scoredCandidates.sort((a, b) => {
         if (b.score !== a.score) {
           return b.score - a.score;
+        }
+        const timeA = a.org.createdAt ? new Date(a.org.createdAt).getTime() : 0;
+        const timeB = b.org.createdAt ? new Date(b.org.createdAt).getTime() : 0;
+        if (timeB !== timeA) {
+          return timeB - timeA;
         }
         return a.org.id.localeCompare(b.org.id);
       });

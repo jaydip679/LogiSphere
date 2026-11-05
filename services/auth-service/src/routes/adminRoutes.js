@@ -10,6 +10,7 @@ router.use(authenticate);
 router.use(requireRole('PLATFORM_ADMIN'));
 
 router.get('/organizations/pending', adminController.getPendingOrganizations);
+router.get('/organizations', adminController.getAllOrganizations);
 router.get('/organizations/:id', adminController.getOrganizationDetails);
 router.post(
   '/organizations/:id/review',

@@ -27,7 +27,7 @@ class OrganizationService {
           name: data.name,
           registrationNumber: data.registrationNumber || null,
           contactEmail: data.contactEmail,
-          contactPhone: data.contactPhone,
+          contactPhone: data.contactPhone || '',
           serviceAreas: data.serviceAreas,
           supportedCategories: data.supportedCategories,
           status: 'PENDING_REVIEW',
@@ -41,7 +41,7 @@ class OrganizationService {
           email: data.ownerEmail,
           passwordHash,
           fullName: data.ownerFullName,
-          phone: data.ownerPhone,
+          phone: data.ownerPhone || null,
           role: 'COMPANY_OWNER',
         },
         tx
@@ -164,7 +164,7 @@ class OrganizationService {
           email: staffData.email,
           passwordHash,
           fullName: staffData.fullName,
-          phone: staffData.phone,
+          phone: staffData.phone || null,
           role: staffData.role,
           mustChangePassword: true,
         },
@@ -207,6 +207,11 @@ class OrganizationService {
   async getPendingOrganizations(page = 1, limit = 20) {
     const skip = (page - 1) * limit;
     return organizationRepository.findPending(skip, limit);
+  }
+
+  async getAllOrganizations(page = 1, limit = 50, status = null) {
+    const skip = (page - 1) * limit;
+    return organizationRepository.findAll(skip, limit, status);
   }
 
   async getOrganizationDetails(orgId) {

@@ -49,6 +49,31 @@ class OrganizationRepository {
     return { total, items };
   }
 
+  async findAll(skip = 0, take = 50, status = null) {
+    const where = status ? { status } : {};
+    const [total, items] = await Promise.all([
+      prisma.organization.count({ where }),
+      prisma.organization.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          memberships: {
+            where: { role: 'COMPANY_OWNER' },
+            include: {
+              user: {
+                select: { id: true, email: true, fullName: true, phone: true },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return { total, items };
+  }
+
   async findApprovedCoverage(hub) {
     // Returns approved organizations that include the specified hub in serviceAreas
     const approvedOrgs = await prisma.organization.findMany({
@@ -58,6 +83,7 @@ class OrganizationRepository {
         name: true,
         serviceAreas: true,
         supportedCategories: true,
+        createdAt: true,
       },
     });
 

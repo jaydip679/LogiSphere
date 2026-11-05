@@ -121,7 +121,7 @@ async function runE2ETests() {
       name: `Apex Carrier ${testSuffix} Pvt Ltd`,
       contactEmail: companyEmail,
       contactPhone: companyPhone,
-      serviceAreas: ['Delhi NCR', 'Mumbai'],
+      serviceAreas: ['Delhi NCR', 'Chennai'],
       supportedCategories: ['PARCEL', 'DOCUMENT', 'CORPORATE'],
       ownerFullName: 'Vikram Dispatcher',
       ownerEmail: companyEmail,
@@ -283,7 +283,7 @@ async function runE2ETests() {
     // Pre-auth estimate calculation
     const estimateRes = await client.post('/api/v1/shipments/estimate-price', {
       pickupPinCode: '110001',
-      deliveryPinCode: '400001',
+      deliveryPinCode: '600001',
       weightKg: 45.0,
       category: 'PARCEL',
     });
@@ -310,9 +310,9 @@ async function runE2ETests() {
         recipientName: 'Sunil Sharma',
         recipientPhone: '+919877712345',
         deliveryAddress: 'Tech Park, Bandra Kurla Complex',
-        deliveryCity: 'Mumbai',
-        deliveryState: 'Maharashtra',
-        deliveryPinCode: '400001',
+        deliveryCity: 'Chennai',
+        deliveryState: 'Tamil Nadu',
+        deliveryPinCode: '600001',
         category: 'PARCEL',
         packageDescription: 'Precision electronic sensors',
         weightKg: 45.0,

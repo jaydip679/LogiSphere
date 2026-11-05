@@ -20,6 +20,9 @@ router.post('/estimate-price', validate(priceEstimateSchema), shipmentController
 // Protected routes
 router.use(authenticate);
 
+// List shipments (Customer gets theirs, Carrier gets assigned, Admin gets all)
+router.get('/', shipmentController.getMyShipments);
+
 // Customer endpoints
 router.post(
   '/',
@@ -28,7 +31,6 @@ router.post(
   validate(createShipmentSchema),
   shipmentController.createShipment
 );
-router.get('/', requireRole('CUSTOMER'), shipmentController.getMyShipments);
 router.post('/:id/cancel', shipmentController.cancelShipment);
 router.post('/:id/retry-matching', requireRole('CUSTOMER'), shipmentController.retryMatching);
 router.post(
