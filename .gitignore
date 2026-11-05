@@ -161,3 +161,6 @@ storage/
 **/secrets/*
 !**/secrets/.gitkeep
 !**/secrets/.gitignore
+
+# Temporary OAuth Token Generation Script
+scripts/generate-gmail-token.js
