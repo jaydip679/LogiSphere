@@ -1,15 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Search, MapPin, CheckCircle2, ArrowRight, AlertCircle, Clock } from 'lucide-react';
 import Navbar from '../components/layout/Navbar';
 import Footer from '../components/layout/Footer';
 import Badge from '../components/common/Badge';
+import apiClient from '../api/apiClient';
 
 export default function PublicTrackingPage() {
   const [searchParams] = useSearchParams();
-  const initialId = searchParams.get('trackingNumber') || 'TRK-8821-MUM-BLR';
+  const initialId = searchParams.get('trackingNumber') || '';
   const [trackingId, setTrackingId] = useState(initialId);
   const [activeConsignment, setActiveConsignment] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSearch = async (idToSearch) => {
+    const id = (idToSearch || trackingId).trim().toUpperCase();
+    if (!id) return;
+
+    setLoading(true);
+    setError('');
+    setActiveConsignment(null);
+
+    try {
+      const res = await apiClient.get(`/api/v1/tracking/${id}`);
+      setActiveConsignment(res.data?.data);
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setError(`No tracking history found for consignment "${id}". Please verify the tracking number.`);
+      } else {
+        setError(err.response?.data?.message || 'Unable to retrieve tracking telemetry at this moment.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (initialId) {
@@ -17,60 +42,27 @@ export default function PublicTrackingPage() {
     }
   }, [initialId]);
 
-  const handleSearch = (idToSearch) => {
-    const id = idToSearch || trackingId;
-    if (!id.trim()) return;
-
-    // Simulated shipment tracking lookup
-    setActiveConsignment({
-      trackingNumber: id.trim().toUpperCase(),
-      status: 'IN_TRANSIT',
-      carrier: 'Apex Express Logistics',
-      origin: { hub: 'Mumbai Hub', pin: '400001', state: 'Maharashtra' },
-      destination: { hub: 'Bengaluru Hub', pin: '560001', state: 'Karnataka' },
-      estimatedDelivery: 'Today, 18:30 IST',
-      driver: { name: 'Vikram Kumar', vehicle: 'Tata 407 (MH-12-DE-9081)' },
-      weight: '45.5 kg',
-      currentLocation: 'Pune Bypass Expressway, Maharashtra',
-      milestones: [
-        {
-          status: 'CREATED',
-          label: 'Shipment Created',
-          timestamp: '04 Nov 2026, 08:15 IST',
-          completed: true,
-        },
-        {
-          status: 'PICKED_UP',
-          label: 'Picked Up by Driver',
-          timestamp: '04 Nov 2026, 09:30 IST',
-          completed: true,
-        },
-        {
-          status: 'IN_TRANSIT',
-          label: 'In Transit on National Corridor',
-          timestamp: '04 Nov 2026, 14:15 IST',
-          completed: true,
-          active: true,
-        },
-        {
-          status: 'OUT_FOR_DELIVERY',
-          label: 'Out for Doorstep Delivery',
-          timestamp: 'Pending Arrival at BLR Hub',
-          completed: false,
-        },
-        {
-          status: 'DELIVERED',
-          label: 'Delivered to Consignee',
-          timestamp: 'Estimated 18:30 IST',
-          completed: false,
-        },
-      ],
-    });
-  };
-
   const onSubmit = (e) => {
     e.preventDefault();
     handleSearch(trackingId);
+  };
+
+  const getStatusBadgeVariant = (status) => {
+    switch (status) {
+      case 'DELIVERED':
+        return 'success';
+      case 'IN_TRANSIT':
+      case 'PICKED_UP':
+      case 'OUT_FOR_DELIVERY':
+        return 'brand';
+      case 'CONFIRMED':
+      case 'ASSIGNED':
+        return 'accent';
+      case 'DELIVERY_FAILED':
+        return 'danger';
+      default:
+        return 'warning';
+    }
   };
 
   return (
@@ -82,13 +74,13 @@ export default function PublicTrackingPage() {
           {/* Header */}
           <div className="text-center max-w-xl mx-auto mb-8 space-y-2">
             <Badge variant="brand" size="sm">
-              Public Telemetry Search
+              Live Consignment Telemetry
             </Badge>
             <h1 className="text-3xl font-bold text-navy-900 tracking-tight">
               Track Your Consignment
             </h1>
             <p className="text-sm text-slate-600">
-              Live Indian corridor tracking with append-only milestone verification
+              Real-time Indian corridor milestone tracking verified by append-only ledger
             </p>
           </div>
 
@@ -104,16 +96,26 @@ export default function PublicTrackingPage() {
               type="text"
               value={trackingId}
               onChange={(e) => setTrackingId(e.target.value)}
-              placeholder="Enter Consignment ID (e.g. TRK-8821-MUM-BLR)"
-              className="w-full px-3 py-2 text-sm text-slate-900 placeholder-slate-400 bg-transparent focus:outline-none"
+              placeholder="Enter Consignment Tracking Number (e.g. LSP-20261105-XXXXXX)"
+              required
+              className="w-full px-3 py-2 text-sm text-slate-900 placeholder-slate-400 bg-transparent focus:outline-none font-mono"
             />
             <button
               type="submit"
-              className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shrink-0 transition-colors shadow-sm"
+              disabled={loading}
+              className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold rounded-xl shrink-0 transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
             >
-              Search Status
+              {loading ? 'Searching...' : 'Search Status'}
             </button>
           </form>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-8 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-sm text-rose-700">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
           {/* Result Card */}
           {activeConsignment && (
@@ -126,57 +128,13 @@ export default function PublicTrackingPage() {
                     {activeConsignment.trackingNumber}
                   </div>
                   <div className="text-xs text-slate-300 mt-0.5">
-                    Carrier: {activeConsignment.carrier}
+                    Latest status updated directly from LogiSphere tracking ledger
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="accent" size="sm">
-                    {activeConsignment.status}
+                  <Badge variant={getStatusBadgeVariant(activeConsignment.currentStatus)} size="sm">
+                    {activeConsignment.currentStatus}
                   </Badge>
-                </div>
-              </div>
-
-              {/* Corridor Route */}
-              <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-brand-50 border border-brand-200 flex items-center justify-center text-brand-600">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-500 font-medium">Origin</div>
-                      <div className="text-sm font-bold text-navy-900">
-                        {activeConsignment.origin.hub} ({activeConsignment.origin.pin})
-                      </div>
-                      <div className="text-xs text-slate-500">{activeConsignment.origin.state}</div>
-                    </div>
-                  </div>
-
-                  <div className="hidden sm:flex items-center text-slate-300">
-                    <ArrowRight className="w-5 h-5" />
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-accent-50 border border-accent-200 flex items-center justify-center text-accent-600">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="text-xs text-slate-500 font-medium">Destination</div>
-                      <div className="text-sm font-bold text-navy-900">
-                        {activeConsignment.destination.hub} ({activeConsignment.destination.pin})
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {activeConsignment.destination.state}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
-                    <div className="text-slate-500 font-medium">Estimated Arrival</div>
-                    <div className="font-bold text-navy-900">
-                      {activeConsignment.estimatedDelivery}
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -185,55 +143,55 @@ export default function PublicTrackingPage() {
                 <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-6">
                   Milestone Progression Timeline
                 </h2>
-                <div className="space-y-6">
-                  {activeConsignment.milestones.map((m, idx) => (
-                    <div key={idx} className="flex items-start gap-4">
-                      <div className="flex flex-col items-center">
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs ${
-                            m.completed
-                              ? 'bg-emerald-500 text-white'
-                              : m.active
-                                ? 'bg-brand-600 text-white animate-pulse'
-                                : 'bg-slate-100 text-slate-400 border border-slate-300'
-                          }`}
-                        >
-                          {m.completed ? (
+                {activeConsignment.timeline && activeConsignment.timeline.length > 0 ? (
+                  <div className="space-y-6">
+                    {activeConsignment.timeline.map((m, idx) => (
+                      <div key={m.id || idx} className="flex items-start gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs bg-emerald-500 text-white shadow-sm">
                             <CheckCircle2 className="w-4 h-4" />
-                          ) : (
-                            <span>{idx + 1}</span>
+                          </div>
+                          {idx < activeConsignment.timeline.length - 1 && (
+                            <div className="w-0.5 h-10 mt-1 bg-emerald-400" />
                           )}
                         </div>
-                        {idx < activeConsignment.milestones.length - 1 && (
-                          <div
-                            className={`w-0.5 h-10 mt-1 ${
-                              m.completed ? 'bg-emerald-400' : 'bg-slate-200'
-                            }`}
-                          />
-                        )}
-                      </div>
 
-                      <div className="flex-1 pt-0.5">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                          <span
-                            className={`text-sm font-semibold ${
-                              m.completed ? 'text-navy-900' : 'text-slate-400'
-                            }`}
-                          >
-                            {m.label}
-                          </span>
-                          <span className="text-xs font-mono text-slate-500">{m.timestamp}</span>
-                        </div>
-                        {m.active && (
-                          <div className="mt-1 text-xs text-brand-600 font-medium">
-                            Current Telemetry Checkpoint: {activeConsignment.currentLocation}
+                        <div className="flex-1 pt-0.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <span className="text-sm font-bold text-navy-900">
+                              {m.status}
+                            </span>
+                            <span className="text-xs font-mono text-slate-500">
+                              {m.timestamp ? new Date(m.timestamp).toLocaleString() : ''}
+                            </span>
                           </div>
-                        )}
+                          {m.location && (
+                            <div className="mt-1 text-xs text-slate-600 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                              <span>{m.location}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-xs text-slate-500">
+                    No milestone progression events recorded yet.
+                  </div>
+                )}
               </div>
+            </div>
+          )}
+
+          {/* Initial / Empty prompt */}
+          {!activeConsignment && !error && !loading && (
+            <div className="p-12 bg-white rounded-2xl border border-slate-200 text-center space-y-2">
+              <Clock className="w-10 h-10 text-slate-300 mx-auto" />
+              <h3 className="text-sm font-bold text-navy-900">Ready to Track Consignment</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Enter your consignment tracking code above to view live corridor progress and delivery milestones.
+              </p>
             </div>
           )}
         </div>

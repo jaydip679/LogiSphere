@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
 import Logo from '../components/common/Logo';
 import Button from '../components/common/Button';
+import { useAuth } from '../context/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { login, getDefaultPortalRoute } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       setError('Please provide both email and password.');
@@ -20,30 +23,21 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    // Mock authentication transition / placeholder for API call
-    setTimeout(() => {
+    try {
+      const data = await login(email, password);
+      const user = data.user;
+      const targetPath = location.state?.from?.pathname || getDefaultPortalRoute(user.role);
+      navigate(targetPath, { replace: true });
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error?.message ||
+        err.message ||
+        'Authentication failed. Please verify your credentials.';
+      setError(errorMessage);
+    } finally {
       setLoading(false);
-      // Determine redirection based on role or email hint
-      if (email.includes('admin')) {
-        navigate('/portal/admin');
-      } else if (email.includes('driver')) {
-        navigate('/portal/driver');
-      } else if (
-        email.includes('logistics') ||
-        email.includes('carrier') ||
-        email.includes('fleet')
-      ) {
-        navigate('/portal/company');
-      } else {
-        navigate('/portal/customer');
-      }
-    }, 600);
-  };
-
-  const handleRoleQuickFill = (roleEmail, rolePass) => {
-    setEmail(roleEmail);
-    setPassword(rolePass);
-    setError('');
+    }
   };
 
   return (
@@ -84,6 +78,7 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@company.com"
                   required
+                  autoComplete="email"
                   className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
                 />
               </div>
@@ -103,6 +98,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
                   required
+                  autoComplete="current-password"
                   className="block w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
                 />
               </div>
@@ -120,61 +116,20 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Quick Demo Role Autofill */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2 text-center">
-              Quick Demo Fill
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleRoleQuickFill('customer@logisphere.local', 'Password123!')}
-                className="p-1.5 text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-left"
-              >
-                <div className="font-semibold">Customer</div>
-                <div className="text-[10px] text-slate-500 truncate">customer@logisphere.local</div>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  handleRoleQuickFill('dispatcher@apexlogistics.local', 'Password123!')
-                }
-                className="p-1.5 text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-left"
-              >
-                <div className="font-semibold">Logistics Company</div>
-                <div className="text-[10px] text-slate-500 truncate">dispatcher@apex...</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRoleQuickFill('driver@apexlogistics.local', 'Password123!')}
-                className="p-1.5 text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-left"
-              >
-                <div className="font-semibold">Driver</div>
-                <div className="text-[10px] text-slate-500 truncate">driver@apex...</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRoleQuickFill('admin@logisphere.local', 'AdminSecure2026!')}
-                className="p-1.5 text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-md text-left"
-              >
-                <div className="font-semibold">Platform Admin</div>
-                <div className="text-[10px] text-slate-500 truncate">admin@logisphere.local</div>
-              </button>
-            </div>
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center space-y-2">
+            <p className="text-xs text-slate-600">
+              Don't have an account?{' '}
+              <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
+                Register here
+              </Link>
+            </p>
+            <p className="text-xs text-slate-500">
+              Looking to track a consignment?{' '}
+              <Link to="/track" className="font-semibold text-slate-700 hover:text-navy-900">
+                Public Tracking
+              </Link>
+            </p>
           </div>
-
-          <div className="mt-6 text-center text-xs text-slate-600">
-            Don't have an account yet?{' '}
-            <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-              Register here
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link to="/" className="text-xs text-slate-500 hover:text-slate-800 transition-colors">
-            ← Return to LogiSphere Homepage
-          </Link>
         </div>
       </div>
     </div>

@@ -1,23 +1,112 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { User, Truck, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { User, Truck, ShieldCheck, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import Logo from '../components/common/Logo';
 import Button from '../components/common/Button';
+import { useAuth } from '../context/AuthContext';
+
+const AVAILABLE_HUBS = [
+  'Delhi NCR',
+  'Mumbai',
+  'Bengaluru',
+  'Hyderabad',
+  'Chennai',
+  'Kolkata',
+  'Pune',
+  'Ahmedabad',
+];
 
 export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const initialRole = searchParams.get('role') === 'COMPANY' ? 'COMPANY' : 'CUSTOMER';
   const [role, setRole] = useState(initialRole);
-  const [name, setName] = useState('');
+
+  // Common customer fields
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [orgName, setOrgName] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const navigate = useNavigate();
+  const [accountType, setAccountType] = useState('INDIVIDUAL');
+  const [businessName, setBusinessName] = useState('');
 
-  const handleRegister = (e) => {
+  // Carrier specific fields
+  const [companyName, setCompanyName] = useState('');
+  const [selectedHubs, setSelectedHubs] = useState(['Delhi NCR', 'Mumbai']);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [successInfo, setSuccessInfo] = useState(null);
+
+  const { registerCustomer, registerCompany } = useAuth();
+
+  const toggleHub = (hub) => {
+    if (selectedHubs.includes(hub)) {
+      if (selectedHubs.length > 1) {
+        setSelectedHubs(selectedHubs.filter((h) => h !== hub));
+      }
+    } else {
+      setSelectedHubs([...selectedHubs, hub]);
+    }
+  };
+
+  const handleRegister = async (e) => {
     e.preventDefault();
-    setSubmitted(true);
+    setError('');
+
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('Password must be at least 8 characters long and contain at least one uppercase letter and one number.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (role === 'CUSTOMER') {
+        const payload = {
+          fullName: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          password,
+          accountType,
+          ...(accountType === 'BUSINESS' && businessName ? { businessName: businessName.trim() } : {}),
+        };
+        const res = await registerCustomer(payload);
+        setSuccessInfo(res.data);
+        setSubmitted(true);
+      } else {
+        if (!companyName.trim()) {
+          setError('Organization business name is required.');
+          setLoading(false);
+          return;
+        }
+        if (selectedHubs.length === 0) {
+          setError('Please select at least one corridor hub.');
+          setLoading(false);
+          return;
+        }
+
+        const payload = {
+          name: companyName.trim(),
+          contactEmail: email.trim().toLowerCase(),
+          serviceAreas: selectedHubs,
+          supportedCategories: ['PARCEL', 'DOCUMENT', 'CORPORATE'],
+          ownerFullName: fullName.trim(),
+          ownerEmail: email.trim().toLowerCase(),
+          ownerPassword: password,
+        };
+        const res = await registerCompany(payload);
+        setSuccessInfo(res.data);
+        setSubmitted(true);
+      }
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.response?.data?.error?.message ||
+        err.message ||
+        'Registration failed. Please verify your information.';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,11 +130,13 @@ export default function RegisterPage() {
               <div className="w-14 h-14 bg-emerald-50 border border-emerald-200 rounded-full flex items-center justify-center mx-auto text-emerald-600">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-navy-900">Registration Received!</h3>
+              <h3 className="text-xl font-bold text-navy-900">
+                {role === 'COMPANY' ? 'Carrier Application Submitted!' : 'Account Successfully Created!'}
+              </h3>
               <p className="text-sm text-slate-600">
                 {role === 'COMPANY'
-                  ? 'Your logistics organization application has been submitted. Platform Administrators review carrier compliance within 24 hours.'
-                  : 'Your customer account is ready! Sign in to start booking and tracking consignments.'}
+                  ? `Your organization application for "${successInfo?.organization?.name || companyName}" is registered. Platform Administrators will review your compliance before dispatch activation.`
+                  : `Welcome to LogiSphere, ${fullName}! Your account has been registered and is ready for use.`}
               </p>
               {role === 'COMPANY' && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 text-left">
@@ -54,8 +145,7 @@ export default function RegisterPage() {
                     <span>Status: PENDING_REVIEW</span>
                   </div>
                   <span>
-                    Carrier dispatch and marketplace biddings will activate upon administrative
-                    approval.
+                    You can sign in to view your application status. Bidding on marketplace consignments will unlock once approved by Platform Administration.
                   </span>
                 </div>
               )}
@@ -71,7 +161,10 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <button
                   type="button"
-                  onClick={() => setRole('CUSTOMER')}
+                  onClick={() => {
+                    setRole('CUSTOMER');
+                    setError('');
+                  }}
                   className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                     role === 'CUSTOMER'
                       ? 'border-brand-600 bg-brand-50/50 ring-2 ring-brand-100'
@@ -91,7 +184,10 @@ export default function RegisterPage() {
 
                 <button
                   type="button"
-                  onClick={() => setRole('COMPANY')}
+                  onClick={() => {
+                    setRole('COMPANY');
+                    setError('');
+                  }}
                   className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                     role === 'COMPANY'
                       ? 'border-brand-600 bg-brand-50/50 ring-2 ring-brand-100'
@@ -110,30 +206,65 @@ export default function RegisterPage() {
                 </button>
               </div>
 
-              <form className="space-y-4" onSubmit={handleRegister}>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Rohit Sharma"
-                    required
-                    className="block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
-                  />
+              {error && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-700">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
                 </div>
+              )}
+
+              <form className="space-y-4" onSubmit={handleRegister}>
+                {role === 'CUSTOMER' && (
+                  <div className="flex gap-4 p-2 bg-slate-50 rounded-lg border border-slate-200 text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value="INDIVIDUAL"
+                        checked={accountType === 'INDIVIDUAL'}
+                        onChange={() => setAccountType('INDIVIDUAL')}
+                        className="text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="font-semibold text-slate-700">Individual Shipper</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="accountType"
+                        value="BUSINESS"
+                        checked={accountType === 'BUSINESS'}
+                        onChange={() => setAccountType('BUSINESS')}
+                        className="text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="font-semibold text-slate-700">Business / Enterprise</span>
+                    </label>
+                  </div>
+                )}
+
+                {role === 'CUSTOMER' && accountType === 'BUSINESS' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Business Entity Name
+                    </label>
+                    <input
+                      type="text"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                      placeholder="TechCorp India Pvt Ltd"
+                      className="block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
+                    />
+                  </div>
+                )}
 
                 {role === 'COMPANY' && (
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                      Organization / Fleet Business Name
+                      Organization / Fleet Business Name *
                     </label>
                     <input
                       type="text"
-                      value={orgName}
-                      onChange={(e) => setOrgName(e.target.value)}
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Apex Logistics Private Limited"
                       required
                       className="block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
@@ -143,7 +274,21 @@ export default function RegisterPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Work Email Address
+                    {role === 'COMPANY' ? 'Owner / Authorized Representative Name *' : 'Full Name *'}
+                  </label>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Rohit Sharma"
+                    required
+                    className="block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                    Work Email Address *
                   </label>
                   <input
                     type="email"
@@ -157,39 +302,67 @@ export default function RegisterPage() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Password
+                    Password *
                   </label>
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Minimum 8 characters"
+                    placeholder="Min 8 characters, 1 uppercase, 1 number"
                     required
                     className="block w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-slate-900"
                   />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Must be 8+ characters with at least one uppercase letter and one number.
+                  </p>
                 </div>
 
-                <Button type="submit" variant="primary" size="md" className="w-full mt-2">
-                  {role === 'COMPANY'
-                    ? 'Submit Carrier Onboarding Application'
-                    : 'Create Shipper Account'}
+                {role === 'COMPANY' && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                      Operating Corridor Hubs (Select at least one) *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      {AVAILABLE_HUBS.map((hub) => (
+                        <button
+                          key={hub}
+                          type="button"
+                          onClick={() => toggleHub(hub)}
+                          className={`px-3 py-1.5 rounded-lg border text-xs text-left font-medium transition-colors ${
+                            selectedHubs.includes(hub)
+                              ? 'bg-brand-50 border-brand-500 text-brand-700'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          {selectedHubs.includes(hub) ? '✓ ' : '+ '} {hub}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="md"
+                  disabled={loading}
+                  className="w-full mt-4"
+                  icon={ArrowRight}
+                >
+                  {loading ? 'Creating Account...' : 'Complete Registration'}
                 </Button>
               </form>
 
-              <div className="mt-6 text-center text-xs text-slate-600">
-                Already have an account?{' '}
-                <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-700">
-                  Sign In
-                </Link>
+              <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+                <p className="text-xs text-slate-600">
+                  Already have an account?{' '}
+                  <Link to="/login" className="font-semibold text-brand-600 hover:text-brand-700">
+                    Sign In here
+                  </Link>
+                </p>
               </div>
             </>
           )}
-        </div>
-
-        <div className="mt-6 text-center">
-          <Link to="/" className="text-xs text-slate-500 hover:text-slate-800 transition-colors">
-            ← Return to LogiSphere Homepage
-          </Link>
         </div>
       </div>
     </div>

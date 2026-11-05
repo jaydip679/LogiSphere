@@ -1,20 +1,10 @@
-import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import {
-  LogOut,
-  User,
-  ShieldCheck,
-  Truck,
-  Package,
-  Layers,
-  Send,
-  Menu,
-  X,
-  Bell,
-  ExternalLink,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { LogOut, Bell, Menu, X, User } from 'lucide-react';
 import Logo from '../common/Logo';
 import Badge from '../common/Badge';
+import { useAuth } from '../../context/AuthContext';
+import apiClient from '../../api/apiClient';
 
 export default function PortalLayout({
   title,
@@ -27,11 +17,35 @@ export default function PortalLayout({
   children,
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const handleLogout = () => {
-    navigate('/login');
+  useEffect(() => {
+    // Fetch real unread notification count
+    let isMounted = true;
+    const fetchUnread = async () => {
+      try {
+        const res = await apiClient.get('/api/v1/notifications/unread-count');
+        if (isMounted && res.data?.data) {
+          setUnreadCount(res.data.data.unreadCount || 0);
+        }
+      } catch {
+        // Silently ignore if not authorized or network issue
+      }
+    };
+
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   const roleBadges = {
@@ -61,47 +75,36 @@ export default function PortalLayout({
 
             {/* Right side user info & actions */}
             <div className="flex items-center gap-3">
-              {/* Quick role switcher dropdown or links */}
-              <div className="hidden lg:flex items-center gap-1.5 text-xs text-slate-500 mr-2">
-                <span>Switch Portal:</span>
-                <Link
-                  to="/portal/customer"
-                  className={`px-2 py-1 rounded hover:bg-slate-100 ${
-                    role === 'CUSTOMER' ? 'font-bold text-brand-600' : ''
-                  }`}
+              {/* Notification icon */}
+              <div className="relative">
+                <button
+                  type="button"
+                  className="p-2 text-slate-500 hover:text-navy-900 rounded-lg hover:bg-slate-100 transition-colors"
+                  title="Notifications"
                 >
-                  Customer
-                </Link>
-                <span>•</span>
-                <Link
-                  to="/portal/company"
-                  className={`px-2 py-1 rounded hover:bg-slate-100 ${
-                    role === 'COMPANY' ? 'font-bold text-brand-600' : ''
-                  }`}
-                >
-                  Carrier
-                </Link>
-                <span>•</span>
-                <Link
-                  to="/portal/driver"
-                  className={`px-2 py-1 rounded hover:bg-slate-100 ${
-                    role === 'DRIVER' ? 'font-bold text-brand-600' : ''
-                  }`}
-                >
-                  Driver
-                </Link>
-                <span>•</span>
-                <Link
-                  to="/portal/admin"
-                  className={`px-2 py-1 rounded hover:bg-slate-100 ${
-                    role === 'ADMIN' ? 'font-bold text-brand-600' : ''
-                  }`}
-                >
-                  Admin
-                </Link>
+                  <Bell className="w-4 h-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-600 rounded-full ring-2 ring-white" />
+                  )}
+                </button>
               </div>
 
-              <div className="h-5 w-px bg-slate-200 hidden lg:block" />
+              {/* Logged in User Profile Info */}
+              <div className="hidden sm:flex items-center gap-2 pl-3 border-l border-slate-200 text-xs">
+                <div className="w-7 h-7 bg-brand-50 border border-brand-200 rounded-full flex items-center justify-center text-brand-700 font-bold text-xs">
+                  {user?.fullName ? user.fullName[0].toUpperCase() : <User className="w-3.5 h-3.5" />}
+                </div>
+                <div className="text-left">
+                  <div className="font-semibold text-slate-800 leading-tight">
+                    {user?.fullName || 'User'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 leading-tight truncate max-w-[140px]">
+                    {user?.email || ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
               <button
                 type="button"
@@ -126,27 +129,39 @@ export default function PortalLayout({
 
         {/* Mobile menu dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white p-4 space-y-2">
+          <div className="md:hidden border-t border-slate-200 bg-white p-4 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <span className="text-xs font-bold text-slate-500 uppercase">Portals</span>
+              <div className="text-xs">
+                <div className="font-bold text-navy-900">{user?.fullName}</div>
+                <div className="text-slate-500">{user?.email}</div>
+              </div>
               <Badge variant={badge.variant} size="xs">
                 {badge.text}
               </Badge>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <Link to="/portal/customer" className="p-2 rounded bg-slate-50 hover:bg-slate-100">
-                Shipper Portal
-              </Link>
-              <Link to="/portal/company" className="p-2 rounded bg-slate-50 hover:bg-slate-100">
-                Logistics Carrier
-              </Link>
-              <Link to="/portal/driver" className="p-2 rounded bg-slate-50 hover:bg-slate-100">
-                Fleet Driver View
-              </Link>
-              <Link to="/portal/admin" className="p-2 rounded bg-slate-50 hover:bg-slate-100">
-                Platform Admin
-              </Link>
-            </div>
+            {navItems.length > 0 && (
+              <div className="grid grid-cols-1 gap-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onTabChange && onTabChange(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex items-center gap-2 p-2 text-xs font-semibold rounded-lg text-left ${
+                        isActive ? 'bg-navy-900 text-white' : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {Icon && <Icon className="w-4 h-4" />}
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </header>
