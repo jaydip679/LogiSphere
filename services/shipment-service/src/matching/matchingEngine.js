@@ -39,7 +39,23 @@ class MatchingEngine {
 
       const deliveryOrgIds = new Set(deliveryCoverage.map((o) => o.id));
       // Intersection: org must cover both pickup and delivery hubs
-      const eligibleCoverageOrgs = pickupCoverage.filter((org) => deliveryOrgIds.has(org.id));
+      let eligibleCoverageOrgs = pickupCoverage.filter((org) => deliveryOrgIds.has(org.id));
+
+      // Fallback 1: If no org covers both hubs, fallback to orgs covering pickup hub (origin network)
+      if (eligibleCoverageOrgs.length === 0 && pickupCoverage.length > 0) {
+        logger.info(
+          `No carrier covers both ${shipment.pickupHub} and ${shipment.deliveryHub}. Falling back to carriers covering pickup hub ${shipment.pickupHub}`
+        );
+        eligibleCoverageOrgs = pickupCoverage;
+      }
+
+      // Fallback 2: If still none, fallback to all approved active carriers across network
+      if (eligibleCoverageOrgs.length === 0) {
+        logger.info(
+          `No specific hub coverage found for ${shipment.pickupHub} -> ${shipment.deliveryHub}. Falling back to all approved network carriers.`
+        );
+        eligibleCoverageOrgs = await authClient.getOrganizationsCoverage(null);
+      }
 
       // 2. Exclude organizations that have already received an offer for this shipment
       const previouslyOfferedOrgIds = await offerRepository.getPreviousOfferOrgIds(shipmentId, tx);
