@@ -20,11 +20,20 @@ describe('Event Contracts', () => {
   });
 
   it('correctly maps events to destination queues', () => {
-    // Notification only
-    expect(getQueuesForEvent(ShipmentEventTypes.SHIPMENT_CREATED)).toEqual([QUEUES.NOTIFICATION]);
-    expect(getQueuesForEvent(ShipmentEventTypes.DRIVER_ASSIGNED)).toEqual([QUEUES.NOTIFICATION]);
-
     // Tracking + Notification
+    expect(getQueuesForEvent(ShipmentEventTypes.SHIPMENT_CREATED)).toEqual([
+      QUEUES.NOTIFICATION,
+      QUEUES.TRACKING,
+    ]);
+    expect(getQueuesForEvent(ShipmentEventTypes.DRIVER_ASSIGNED)).toEqual([
+      QUEUES.NOTIFICATION,
+      QUEUES.TRACKING,
+    ]);
+    expect(getQueuesForEvent(ShipmentEventTypes.SHIPMENT_OFFER_ACCEPTED)).toEqual([
+      QUEUES.NOTIFICATION,
+      QUEUES.TRACKING,
+    ]);
+
     expect(getQueuesForEvent(ShipmentEventTypes.SHIPMENT_PICKED_UP)).toEqual([
       QUEUES.NOTIFICATION,
       QUEUES.TRACKING,

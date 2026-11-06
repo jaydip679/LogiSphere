@@ -23,6 +23,7 @@ const config = {
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgresql://postgres:postgres@localhost:5432/logisphere?schema=tracking',
+  shipmentServiceUrl: process.env.SHIPMENT_SERVICE_URL || 'http://localhost:5002',
   jwt: {
     publicKey,
     algorithm: 'RS256',

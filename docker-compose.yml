@@ -190,6 +190,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
       TRACKING_QUEUE_URL: http://localstack:4566/000000000000/logisphere-tracking-queue
+      SHIPMENT_SERVICE_URL: ${SHIPMENT_SERVICE_URL_INTERNAL:-http://shipment-service:5002}
     networks:
       - logisphere_network
     depends_on:

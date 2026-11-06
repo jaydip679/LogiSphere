@@ -42,7 +42,7 @@ describe('Tracking Service — Workflows, Timeline & Contracts', () => {
   let privateKey;
   let adminToken;
   let customerToken;
-  const internalKey = 'dev_internal_secret_key';
+  const internalKey = require('../src/config').internalServiceKey || 'dev_internal_secret_key';
 
   beforeAll(() => {
     const privateKeyPath = path.resolve(__dirname, '../../auth-service/secrets/jwt-private.key');

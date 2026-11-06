@@ -9,6 +9,9 @@ const { createLogger } = require('@logisphere/logger');
 const logger = createLogger('tracking-service:trackingEventConsumer');
 
 const EVENT_STATUS_MAP = Object.freeze({
+  [ShipmentEventTypes.SHIPMENT_CREATED]: { status: 'CREATED', source: 'CUSTOMER' },
+  [ShipmentEventTypes.SHIPMENT_OFFER_ACCEPTED]: { status: 'CONFIRMED', source: 'CARRIER' },
+  [ShipmentEventTypes.DRIVER_ASSIGNED]: { status: 'ASSIGNED', source: 'DISPATCHER' },
   [ShipmentEventTypes.SHIPMENT_PICKED_UP]: { status: 'PICKED_UP', source: 'DRIVER' },
   [ShipmentEventTypes.SHIPMENT_IN_TRANSIT]: { status: 'IN_TRANSIT', source: 'SYSTEM' },
   [ShipmentEventTypes.SHIPMENT_DELAYED]: { status: 'DELAYED', source: 'DRIVER' },
@@ -78,6 +81,17 @@ class TrackingEventConsumer {
     }
 
     const resolvedTrackingNumber = trackingNumber || `TRK-${shipmentId}`;
+    const resolvedLocation = location || payload.pickupHub || payload.originHub || null;
+    const resolvedNotes =
+      reason ||
+      notes ||
+      (type === ShipmentEventTypes.SHIPMENT_CREATED
+        ? 'Consignment registered and offer broadcasted to carrier marketplace'
+        : type === ShipmentEventTypes.SHIPMENT_OFFER_ACCEPTED
+        ? 'Logistics carrier accepted marketplace offer'
+        : type === ShipmentEventTypes.DRIVER_ASSIGNED
+        ? 'Carrier assigned driver and transport vehicle'
+        : null);
 
     return prisma.$transaction(async (tx) => {
       await trackingRepository.createEvent(
@@ -86,11 +100,11 @@ class TrackingEventConsumer {
           shipmentId: shipmentId || 'UNKNOWN',
           status: mapping.status,
           source: mapping.source,
-          location: location || null,
+          location: resolvedLocation,
           latitude: latitude || null,
           longitude: longitude || null,
           actorId: actorId || null,
-          notes: reason || notes || null,
+          notes: resolvedNotes,
           metadata: metadata || null,
         },
         tx

@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const shipmentRoutes = require('./routes/shipmentRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const internalShipmentRoutes = require('./routes/internalShipmentRoutes');
 const errorHandler = require('./middlewares/errorMiddleware');
 const { sendSuccess } = require('@logisphere/common-utils');
 
@@ -33,6 +34,8 @@ app.get('/health', (req, res) => {
 // Mount routes
 app.use('/api/v1/shipments', shipmentRoutes);
 app.use('/api/v1/reports', reportRoutes);
+app.use('/internal/shipments', internalShipmentRoutes);
+app.use('/api/v1/internal/shipments', internalShipmentRoutes);
 
 // Centralized error handling
 app.use(errorHandler);

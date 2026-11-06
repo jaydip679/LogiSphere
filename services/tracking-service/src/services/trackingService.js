@@ -3,6 +3,7 @@ const simulatorRepository = require('../repositories/simulatorRepository');
 const { RouteSimulator } = require('../simulator/routeSimulator');
 const { NotFoundError, ValidationError } = require('@logisphere/common-utils');
 const { createLogger } = require('@logisphere/logger');
+const config = require('../config');
 
 const logger = createLogger('tracking-service:trackingService');
 
@@ -22,21 +23,85 @@ class TrackingService {
     return event;
   }
 
+  async fetchShipmentFallback(trackingNumber) {
+    const candidateUrls = [
+      `${config.shipmentServiceUrl}/internal/shipments/by-tracking/${encodeURIComponent(trackingNumber)}`,
+      `${config.shipmentServiceUrl}/api/v1/internal/shipments/by-tracking/${encodeURIComponent(trackingNumber)}`,
+    ];
+
+    for (const url of candidateUrls) {
+      try {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'x-internal-service-key': config.internalServiceKey,
+            'Content-Type': 'application/json',
+          },
+          signal: AbortSignal.timeout(3000),
+        });
+
+        if (response.ok) {
+          const json = await response.json();
+          return json.data || null;
+        }
+      } catch {
+        // Continue to next candidate URL
+      }
+    }
+    return null;
+  }
+
   async getTrackingTimeline(trackingNumber) {
     if (!trackingNumber) {
       throw new ValidationError('Tracking number is required', null, 'PARAM_REQUIRED');
     }
 
-    const [events, simulatedPoints] = await Promise.all([
+    let [events, simulatedPoints] = await Promise.all([
       trackingRepository.findByTrackingNumber(trackingNumber),
       simulatorRepository.findByTrackingNumber(trackingNumber),
     ]);
 
     if (events.length === 0 && simulatedPoints.length === 0) {
-      throw new NotFoundError(
-        `No tracking history found for tracking number ${trackingNumber}`,
-        'TRACKING_NOT_FOUND'
-      );
+      // Fallback: Check if shipment exists in shipment-service
+      const shipment = await this.fetchShipmentFallback(trackingNumber);
+      if (shipment) {
+        try {
+          const initialEvent = await trackingRepository.createEvent({
+            trackingNumber: shipment.trackingNumber,
+            shipmentId: shipment.id,
+            status: shipment.status || 'CREATED',
+            source: 'CUSTOMER',
+            location: shipment.pickupHub || `${shipment.pickupCity || ''} Hub`.trim() || null,
+            notes: 'Consignment registered and offer broadcasted to carrier marketplace',
+            metadata: {
+              pickupHub: shipment.pickupHub,
+              deliveryHub: shipment.deliveryHub,
+              pickupCity: shipment.pickupCity,
+              deliveryCity: shipment.deliveryCity,
+            },
+          });
+          events = [initialEvent];
+        } catch (dbErr) {
+          logger.warn(`Failed to auto-seed initial tracking milestone: ${dbErr.message}`);
+          events = [
+            {
+              id: `evt_init_${shipment.id}`,
+              trackingNumber: shipment.trackingNumber,
+              shipmentId: shipment.id,
+              status: shipment.status || 'CREATED',
+              source: 'CUSTOMER',
+              location: shipment.pickupHub || null,
+              notes: 'Consignment registered and offer broadcasted to carrier marketplace',
+              timestamp: shipment.createdAt || new Date().toISOString(),
+            },
+          ];
+        }
+      } else {
+        throw new NotFoundError(
+          `No tracking history found for tracking number ${trackingNumber}`,
+          'TRACKING_NOT_FOUND'
+        );
+      }
     }
 
     // Determine current status & latest milestone
