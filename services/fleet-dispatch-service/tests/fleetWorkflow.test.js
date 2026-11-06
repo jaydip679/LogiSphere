@@ -58,6 +58,7 @@ jest.mock('@aws-sdk/client-sqs', () => ({
   DeleteMessageCommand: jest.fn(),
 }));
 
+const config = require('../src/config');
 const app = require('../src/app');
 const fleetEventConsumer = require('../src/workers/fleetEventConsumer');
 const reservationTimeoutWorker = require('../src/workers/reservationTimeoutWorker');
@@ -71,7 +72,7 @@ describe('Fleet & Dispatch Service — End-to-End Workflow & Contracts', () => {
 
   const orgId = '11111111-1111-1111-1111-111111111111';
   const otherOrgId = '22222222-2222-2222-2222-222222222222';
-  const internalKey = 'dev_internal_secret_key';
+  const internalKey = config.internalServiceKey || 'dev_internal_secret_key';
 
   beforeAll(() => {
     const privateKeyPath = path.resolve(__dirname, '../../auth-service/secrets/jwt-private.key');

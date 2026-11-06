@@ -37,6 +37,7 @@ jest.mock('@aws-sdk/client-sqs', () => ({
   SendMessageCommand: jest.fn().mockImplementation((args) => args),
 }));
 
+const config = require('../src/config');
 const app = require('../src/app');
 const notificationEventConsumer = require('../src/workers/notificationEventConsumer');
 
@@ -45,7 +46,7 @@ describe('Notification Service — SQS Ingestion, APIs & Reliability', () => {
   let customerToken;
   const customerId = 'usr_cust_101';
   const otherCustomerId = 'usr_cust_999';
-  const internalKey = 'dev_internal_secret_key';
+  const internalKey = config.internalServiceKey || 'dev_internal_secret_key';
 
   beforeAll(() => {
     const privateKeyPath = path.resolve(__dirname, '../../auth-service/secrets/jwt-private.key');
