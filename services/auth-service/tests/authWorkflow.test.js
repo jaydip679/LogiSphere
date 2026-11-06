@@ -29,6 +29,13 @@ jest.mock('../src/database/prisma', () => {
     auditLog: {
       create: jest.fn(),
     },
+    emailOtp: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'otp_1' }),
+      update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({}),
+    },
     $transaction: jest.fn((callback) => callback(mockPrisma)),
     $disconnect: jest.fn(),
   };
@@ -36,6 +43,7 @@ jest.mock('../src/database/prisma', () => {
 });
 
 const app = require('../src/app');
+const config = require('../src/config');
 const prisma = require('../src/database/prisma');
 const { hashPassword } = require('../src/utils/passwordUtils');
 const { generateAccessToken, hashToken } = require('../src/utils/tokenUtils');
@@ -78,12 +86,11 @@ describe('Auth Service — API Endpoints & Security Review', () => {
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
       expect(res.body.data.user.email).toBe('customer@logisphere.local');
-      expect(res.body.data.tokens.accessToken).toBeDefined();
-      expect(res.body.data.tokens.refreshToken).toBeDefined();
+      expect(res.body.data.requiresVerification).toBe(true);
     });
 
     it('rejects registration if email already exists', async () => {
-      prisma.user.findUnique.mockResolvedValue({ id: 'existing_usr' });
+      prisma.user.findUnique.mockResolvedValue({ id: 'existing_usr', isEmailVerified: true });
 
       const res = await request(app).post('/api/v1/auth/register/customer').send({
         email: 'duplicate@logisphere.local',
@@ -108,6 +115,7 @@ describe('Auth Service — API Endpoints & Security Review', () => {
         fullName: 'Valid User',
         role: 'CUSTOMER',
         isActive: true,
+        isEmailVerified: true,
         mustChangePassword: false,
         memberships: [],
       });
@@ -397,7 +405,7 @@ describe('Auth Service — API Endpoints & Security Review', () => {
 
       const res = await request(app)
         .get('/internal/organizations/coverage?hub=Mumbai')
-        .set('X-Internal-Service-Key', 'dev_internal_secret_key');
+        .set('X-Internal-Service-Key', config.internalServiceKey);
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
