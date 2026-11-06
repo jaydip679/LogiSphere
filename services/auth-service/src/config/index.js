@@ -37,7 +37,7 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 5001,
   databaseUrl:
     process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=auth',
+    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=app_auth',
   jwt: {
     privateKey,
     publicKey,

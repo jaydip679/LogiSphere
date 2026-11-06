@@ -4,9 +4,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  schemas  = ["auth"]
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["app_auth"]
 }
 
 enum Role {
@@ -17,14 +18,14 @@ enum Role {
   DRIVER
   CUSTOMER
 
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 enum AccountType {
   INDIVIDUAL
   BUSINESS
 
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 enum OrganizationStatus {
@@ -33,7 +34,7 @@ enum OrganizationStatus {
   REJECTED
   SUSPENDED
 
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model User {
@@ -56,7 +57,7 @@ model User {
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
 
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model EmailOtp {
@@ -71,7 +72,7 @@ model EmailOtp {
   createdAt   DateTime  @default(now())
 
   @@index([email, purpose])
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model Organization {
@@ -92,7 +93,7 @@ model Organization {
   memberships Membership[]
   auditLogs   AuditLog[]
 
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model Membership {
@@ -108,7 +109,7 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([userId, organizationId])
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model RefreshToken {
@@ -124,7 +125,7 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
-  @@schema("auth")
+  @@schema("app_auth")
 }
 
 model AuditLog {
@@ -142,5 +143,5 @@ model AuditLog {
 
   @@index([action])
   @@index([organizationId])
-  @@schema("auth")
+  @@schema("app_auth")
 }
