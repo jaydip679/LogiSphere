@@ -7,7 +7,11 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('logisphere_user');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      // Clean up any double-nested user object from previous versions
+      const cleanUser = parsed?.user && parsed.user.role ? parsed.user : parsed;
+      return cleanUser?.role ? cleanUser : null;
     } catch {
       return null;
     }
@@ -22,9 +26,10 @@ export function AuthProvider({ children }) {
       apiClient
         .get('/api/v1/auth/profile')
         .then((res) => {
-          if (res.data?.data) {
-            setUser(res.data.data);
-            localStorage.setItem('logisphere_user', JSON.stringify(res.data.data));
+          const profile = res.data?.data?.user || res.data?.data;
+          if (profile && profile.role) {
+            setUser(profile);
+            localStorage.setItem('logisphere_user', JSON.stringify(profile));
           }
         })
         .catch(() => {
@@ -72,9 +77,10 @@ export function AuthProvider({ children }) {
     if (refreshToken) {
       localStorage.setItem('logisphere_refresh_token', refreshToken);
     }
-    if (authUser) {
-      localStorage.setItem('logisphere_user', JSON.stringify(authUser));
-      setUser(authUser);
+    const cleanUser = authUser?.user && authUser.user.role ? authUser.user : authUser;
+    if (cleanUser && cleanUser.role) {
+      localStorage.setItem('logisphere_user', JSON.stringify(cleanUser));
+      setUser(cleanUser);
     }
 
     return payload;
@@ -106,8 +112,11 @@ export function AuthProvider({ children }) {
       if (tokens.refreshToken) {
         localStorage.setItem('logisphere_refresh_token', tokens.refreshToken);
       }
-      localStorage.setItem('logisphere_user', JSON.stringify(authUser));
-      setUser(authUser);
+      const cleanUser = authUser?.user && authUser.user.role ? authUser.user : authUser;
+      if (cleanUser && cleanUser.role) {
+        localStorage.setItem('logisphere_user', JSON.stringify(cleanUser));
+        setUser(cleanUser);
+      }
     }
 
     return response.data;
@@ -137,14 +146,40 @@ export function AuthProvider({ children }) {
     return response.data;
   };
 
+  const activateStaff = async (email, otp, password) => {
+    const response = await apiClient.post('/api/v1/auth/activate-staff', {
+      email: email.trim().toLowerCase(),
+      otp: otp.trim(),
+      password,
+    });
+
+    const payload = response.data?.data;
+    if (payload?.tokens && payload?.user) {
+      const { user: authUser, tokens } = payload;
+      if (tokens.accessToken) {
+        localStorage.setItem('logisphere_access_token', tokens.accessToken);
+      }
+      if (tokens.refreshToken) {
+        localStorage.setItem('logisphere_refresh_token', tokens.refreshToken);
+      }
+      const cleanUser = authUser?.user && authUser.user.role ? authUser.user : authUser;
+      if (cleanUser && cleanUser.role) {
+        localStorage.setItem('logisphere_user', JSON.stringify(cleanUser));
+        setUser(cleanUser);
+      }
+    }
+
+    return response.data;
+  };
+
   const logout = async () => {
     try {
       const refreshToken = localStorage.getItem('logisphere_refresh_token');
       if (refreshToken) {
         await apiClient.post('/api/v1/auth/logout', { refreshToken });
       }
-    } catch (err) {
-      console.warn('Logout API call error (proceeding with local cleanup):', err?.message);
+    } catch {
+      // Proceed with local logout regardless of API failure
     } finally {
       localStorage.removeItem('logisphere_access_token');
       localStorage.removeItem('logisphere_refresh_token');
@@ -180,6 +215,7 @@ export function AuthProvider({ children }) {
     resendOtp,
     requestPasswordReset,
     resetPassword,
+    activateStaff,
     logout,
     getDefaultPortalRoute,
   };

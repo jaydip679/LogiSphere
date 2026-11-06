@@ -37,6 +37,7 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/organizations', organizationRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/internal', internalRoutes);
+app.use('/api/v1/internal', internalRoutes);
 
 // Centralized error handling
 app.use(errorHandler);
