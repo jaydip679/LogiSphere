@@ -164,7 +164,7 @@ class OrganizationService {
           phone: staffData.phone || null,
           role: staffData.role,
           mustChangePassword: true,
-          isEmailVerified: true, // Company provisioned staff are pre-verified
+          isEmailVerified: false,
           isActive: true,
         },
         tx
@@ -187,6 +187,9 @@ class OrganizationService {
       return newUser;
     });
 
+    // Send invitation email with 6-digit OTP code to driver
+    await otpService.generateAndSendOtp(user.email, 'STAFF_INVITATION', user.fullName);
+
     return {
       user: {
         id: user.id,
@@ -194,11 +197,13 @@ class OrganizationService {
         fullName: user.fullName,
         role: user.role,
         mustChangePassword: user.mustChangePassword,
+        isEmailVerified: false,
       },
+      requiresActivation: true,
       temporaryCredentials: {
         email: user.email,
         temporaryPassword,
-        note: 'User must change this temporary password upon initial login.',
+        note: 'Driver must activate their account and set their private password via the email invitation code.',
       },
     };
   }

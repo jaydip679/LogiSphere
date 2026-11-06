@@ -141,13 +141,16 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-4 border-t border-slate-100 flex flex-col gap-2 text-center text-xs text-slate-600">
             <p>
-              New to LogiSphere?{' '}
-              <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
-                Create an account
+              Invited as a fleet driver?{' '}
+              <Link to="/activate" className="font-semibold text-brand-600 hover:text-brand-700">
+                Activate account & set password
               </Link>
             </p>
-            <p className="text-[11px] text-slate-400">
-              Company staff & drivers use system-provisioned credentials.
+            <p>
+              New to LogiSphere?{' '}
+              <Link to="/register" className="font-semibold text-brand-600 hover:text-brand-700">
+                Create customer account
+              </Link>
             </p>
           </div>
         </div>

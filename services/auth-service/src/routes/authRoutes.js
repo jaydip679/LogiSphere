@@ -10,6 +10,7 @@ const {
   resendOtpSchema,
   requestPasswordResetSchema,
   resetPasswordSchema,
+  activateStaffSchema,
 } = require('../validators/authValidators');
 const { authenticate } = require('../middlewares/authMiddleware');
 
@@ -93,6 +94,13 @@ router.post(
   otpLimiter,
   validate(resetPasswordSchema),
   authController.resetPassword
+);
+
+router.post(
+  '/activate-staff',
+  otpLimiter,
+  validate(activateStaffSchema),
+  authController.activateStaff
 );
 
 // 4. Session & Token Authentication

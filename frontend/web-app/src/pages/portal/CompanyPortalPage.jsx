@@ -193,7 +193,9 @@ export default function CompanyPortalPage() {
         userId: staffUserId || null,
       });
 
-      setSuccessMsg(`Driver ${driverName} registered successfully!`);
+      setSuccessMsg(
+        `Driver ${driverName} registered successfully! An invitation email with a 6-digit activation code has been sent to ${driverEmail.trim()}. The driver can set their own private password at /activate.`
+      );
       setShowAddDriver(false);
       setDriverName('');
       setDriverEmail('');

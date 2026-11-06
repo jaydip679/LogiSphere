@@ -5,6 +5,7 @@ import ProtectedRoute from './components/common/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ActivateDriverPage from './pages/ActivateDriverPage';
 import PublicTrackingPage from './pages/PublicTrackingPage';
 import CustomerPortalPage from './pages/portal/CustomerPortalPage';
 import CompanyPortalPage from './pages/portal/CompanyPortalPage';
@@ -22,6 +23,7 @@ export default function App() {
         {/* Authentication & Onboarding Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/activate" element={<ActivateDriverPage />} />
 
         {/* Public Tracking Telemetry Route */}
         <Route path="/track" element={<PublicTrackingPage />} />

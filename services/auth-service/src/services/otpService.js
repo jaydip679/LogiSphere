@@ -33,10 +33,26 @@ class OtpService {
    */
   async sendOtpEmail({ to, otp, fullName, purpose }) {
     const isPasswordReset = purpose === 'PASSWORD_RESET';
-    const actionLabel = isPasswordReset ? 'Password Reset' : 'Account Verification';
-    const subject = `LogiSphere Verification Code: ${otp}`;
+    const isStaffInvite = purpose === 'STAFF_INVITATION';
 
-    const text = `Hello ${fullName || ''},\n\nYour LogiSphere ${actionLabel} code is: ${otp}\n\nThis code expires in 10 minutes. Please enter it to complete verification.\n\nIf you did not request this code, please ignore this email.`;
+    let actionLabel = 'Account Verification';
+    let heading = 'Account Verification';
+    let subject = `LogiSphere Verification Code: ${otp}`;
+    let introText = `Please use the 6-digit verification code below to complete your verification.`;
+
+    if (isPasswordReset) {
+      actionLabel = 'Password Reset';
+      heading = 'Password Reset';
+      subject = `LogiSphere Password Reset Code: ${otp}`;
+      introText = `Please use the 6-digit code below to reset your password.`;
+    } else if (isStaffInvite) {
+      actionLabel = 'Driver Account Activation';
+      heading = 'Welcome to LogiSphere Fleet!';
+      subject = `LogiSphere Driver Activation Code: ${otp}`;
+      introText = `You have been registered as a fleet driver on LogiSphere. Please use the 6-digit activation code below to activate your account and set your private password.`;
+    }
+
+    const text = `Hello ${fullName || ''},\n\n${introText}\n\nYour 6-digit code is: ${otp}\n\nThis code expires in 10 minutes.\n\nActivate online: http://localhost:3000/activate?email=${encodeURIComponent(to)}\n\nIf you were not expecting this invitation, please ignore this email.`;
 
     const html = `
       <div style="font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
@@ -45,10 +61,10 @@ class OtpService {
           <p style="color: #64748b; font-size: 13px; margin: 4px 0 0;">Intelligent B2B2C Logistics Platform</p>
         </div>
         <div style="border-top: 1px solid #f1f5f9; padding-top: 20px;">
-          <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 12px; font-weight: 600;">${actionLabel}</h2>
+          <h2 style="color: #1e293b; font-size: 18px; margin: 0 0 12px; font-weight: 600;">${heading}</h2>
           <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">
             Hello${fullName ? ` <strong>${fullName}</strong>` : ''},<br>
-            Please use the 6-digit verification code below to complete your ${actionLabel.toLowerCase()}.
+            ${introText}
           </p>
           <div style="text-align: center; margin: 28px 0; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px;">
             <span style="font-size: 36px; font-weight: 800; letter-spacing: 8px; color: #1e3a8a; font-family: monospace;">
@@ -56,6 +72,17 @@ class OtpService {
             </span>
             <p style="color: #94a3b8; font-size: 12px; margin: 8px 0 0;">Valid for 10 minutes</p>
           </div>
+          ${
+            isStaffInvite
+              ? `
+          <div style="text-align: center; margin: 20px 0;">
+            <a href="http://localhost:3000/activate?email=${encodeURIComponent(to)}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-weight: 600; font-size: 14px; padding: 12px 24px; text-decoration: none; border-radius: 8px;">
+              Activate Driver Account & Set Password &rarr;
+            </a>
+          </div>
+          `
+              : ''
+          }
           <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 0 0 16px;">
             For your security, never share this code with anyone. If you did not request this verification, please safely disregard this email.
           </p>

@@ -219,6 +219,74 @@ class AuthService {
     };
   }
 
+  async activateStaff(email, otp, newPassword) {
+    const cleanEmail = email.toLowerCase().trim();
+    // 1. Verify OTP with STAFF_INVITATION purpose (fallback to REGISTRATION if needed)
+    try {
+      await otpService.verifyOtp(cleanEmail, otp, 'STAFF_INVITATION');
+    } catch (err) {
+      if (err.message && err.message.includes('No valid verification code found')) {
+        await otpService.verifyOtp(cleanEmail, otp, 'REGISTRATION');
+      } else {
+        throw err;
+      }
+    }
+
+    // 2. Find user
+    const user = await userRepository.findByEmail(cleanEmail);
+    if (!user) {
+      throw new NotFoundError('User account not found', 'USER_NOT_FOUND');
+    }
+
+    // 3. Set driver's personal secret password and activate
+    const passwordHash = await hashPassword(newPassword);
+    await userRepository.updateUser(user.id, {
+      passwordHash,
+      isEmailVerified: true,
+      mustChangePassword: false,
+    });
+
+    await auditRepository.recordAction({
+      actorId: user.id,
+      action: 'STAFF_ACCOUNT_ACTIVATED',
+      targetType: 'User',
+      targetId: user.id,
+    });
+
+    const activeMembership =
+      user.memberships && user.memberships.length > 0 ? user.memberships[0] : null;
+
+    const tokenPayload = {
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      accountType: user.accountType,
+      organizationId: activeMembership ? activeMembership.organizationId : null,
+    };
+
+    const accessToken = generateAccessToken(tokenPayload);
+    const { rawToken, tokenHash, expiresAt } = generateRefreshToken();
+    await tokenRepository.saveRefreshToken(user.id, tokenHash, expiresAt);
+
+    return {
+      success: true,
+      message: 'Account activated successfully! You are now logged in.',
+      user: {
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        role: user.role,
+        accountType: user.accountType,
+        organizationId: activeMembership ? activeMembership.organizationId : null,
+        isEmailVerified: true,
+      },
+      tokens: {
+        accessToken,
+        refreshToken: rawToken,
+      },
+    };
+  }
+
   async login(email, password) {
     const user = await userRepository.findByEmail(email);
     if (!user) {
