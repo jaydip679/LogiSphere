@@ -6,7 +6,7 @@ echo "Initializing LogiSphere LocalStack SQS Queues"
 echo "=============================================="
 
 ENDPOINT_URL="http://localhost:4566"
-REGION="ap-south-1"
+REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 
 # Helper function to run AWS CLI command against LocalStack
 run_aws() {
@@ -17,35 +17,33 @@ run_aws() {
   fi
 }
 
-# 1. Create Dead-Letter Queues (DLQs)
-echo "Creating Dead-Letter Queues..."
-run_aws sqs create-queue --queue-name logisphere-notification-dlq
-run_aws sqs create-queue --queue-name logisphere-tracking-dlq
-run_aws sqs create-queue --queue-name logisphere-fleet-dlq
+create_queue_with_dlq() {
+  PRIMARY_NAME="$1"
+  DLQ_NAME="$2"
 
-# Retrieve DLQ ARNs
-NOTIF_DLQ_ARN=$(run_aws sqs get-queue-attributes --queue-url "$ENDPOINT_URL/000000000000/logisphere-notification-dlq" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
-TRACK_DLQ_ARN=$(run_aws sqs get-queue-attributes --queue-url "$ENDPOINT_URL/000000000000/logisphere-tracking-dlq" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
-FLEET_DLQ_ARN=$(run_aws sqs get-queue-attributes --queue-url "$ENDPOINT_URL/000000000000/logisphere-fleet-dlq" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
+  echo "Setting up $PRIMARY_NAME -> $DLQ_NAME"
+  run_aws sqs create-queue --queue-name "$DLQ_NAME" > /dev/null 2>&1 || true
+  
+  DLQ_ARN=$(run_aws sqs get-queue-attributes --queue-url "$ENDPOINT_URL/000000000000/$DLQ_NAME" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)
+  echo "  DLQ ARN ($DLQ_NAME): $DLQ_ARN"
 
-echo "Notification DLQ ARN: $NOTIF_DLQ_ARN"
-echo "Tracking DLQ ARN:     $TRACK_DLQ_ARN"
-echo "Fleet DLQ ARN:        $FLEET_DLQ_ARN"
+  run_aws sqs create-queue \
+    --queue-name "$PRIMARY_NAME" \
+    --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$DLQ_ARN\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}" > /dev/null 2>&1 || true
+  echo "  Primary queue created: $PRIMARY_NAME (maxReceiveCount: 5)"
+}
 
-# 2. Create Primary Queues with Redrive Policy (maxReceiveCount = 5)
-echo "Creating Primary SQS Queues with Redrive Policies..."
+# 1. Environment-prefixed queues (logisphere-local-*)
+echo "Creating Local Environment Queues (logisphere-local-*)..."
+create_queue_with_dlq "logisphere-local-notification-queue" "logisphere-local-notification-dlq"
+create_queue_with_dlq "logisphere-local-tracking-queue" "logisphere-local-tracking-dlq"
+create_queue_with_dlq "logisphere-local-fleet-queue" "logisphere-local-fleet-dlq"
 
-run_aws sqs create-queue \
-  --queue-name logisphere-notification-queue \
-  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$NOTIF_DLQ_ARN\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"
-
-run_aws sqs create-queue \
-  --queue-name logisphere-tracking-queue \
-  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$TRACK_DLQ_ARN\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"
-
-run_aws sqs create-queue \
-  --queue-name logisphere-fleet-queue \
-  --attributes "{\"RedrivePolicy\":\"{\\\"deadLetterTargetArn\\\":\\\"$FLEET_DLQ_ARN\\\",\\\"maxReceiveCount\\\":\\\"5\\\"}\"}"
+# 2. Legacy alias queues (logisphere-*) for backward compatibility
+echo "Creating Legacy Compatibility Queues (logisphere-*)..."
+create_queue_with_dlq "logisphere-notification-queue" "logisphere-notification-dlq"
+create_queue_with_dlq "logisphere-tracking-queue" "logisphere-tracking-dlq"
+create_queue_with_dlq "logisphere-fleet-queue" "logisphere-fleet-dlq"
 
 echo "=============================================="
 echo "All LogiSphere SQS queues initialized successfully:"
