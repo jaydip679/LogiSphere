@@ -4,9 +4,19 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const publicKeyPath = process.env.JWT_PUBLIC_KEY_PATH
-  ? path.resolve(__dirname, '../../', process.env.JWT_PUBLIC_KEY_PATH)
-  : path.resolve(__dirname, '../../../../shared/keys/jwt-public.key');
+const resolveKeyPath = (envPath, defaultRelPath) => {
+  if (!envPath) return path.resolve(__dirname, defaultRelPath);
+  if (path.isAbsolute(envPath)) return envPath;
+  if (fs.existsSync(path.resolve(process.cwd(), envPath))) {
+    return path.resolve(process.cwd(), envPath);
+  }
+  return path.resolve(__dirname, '../../', envPath);
+};
+
+const publicKeyPath = resolveKeyPath(
+  process.env.JWT_PUBLIC_KEY_PATH,
+  '../../../../shared/keys/jwt-public.key'
+);
 
 let publicKey = null;
 try {
@@ -31,12 +41,18 @@ const config = {
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || 'dev_internal_secret_key',
   sqs: {
     region: process.env.AWS_REGION || 'ap-south-1',
-    endpoint: process.env.SQS_ENDPOINT || 'http://localhost:4566',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'test',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'test',
-    trackingQueueUrl:
-      process.env.TRACKING_QUEUE_URL ||
-      'http://localhost:4566/000000000000/logisphere-tracking-queue',
+    endpoint:
+      process.env.SQS_ENDPOINT ||
+      (process.env.NODE_ENV === 'production' && !process.env.SQS_ENDPOINT
+        ? undefined
+        : 'http://localhost:4566'),
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || undefined,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || undefined,
+    queuePrefix: process.env.QUEUE_PREFIX || undefined,
+    trackingQueueName: process.env.TRACKING_QUEUE_NAME || 'tracking-queue',
+    trackingQueueUrl: process.env.TRACKING_QUEUE_URL || undefined,
+    trackingDlqName: process.env.TRACKING_DLQ_NAME || 'tracking-dlq',
+    trackingDlqUrl: process.env.TRACKING_DLQ_URL || undefined,
   },
   simulation: {
     defaultWaypointsCount: 10,

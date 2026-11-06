@@ -1,35 +1,54 @@
+const { ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
 const {
-  SQSClient,
-  ReceiveMessageCommand,
-  DeleteMessageCommand,
-  SendMessageCommand,
-} = require('@aws-sdk/client-sqs');
+  createSqsClient,
+  resolveQueueUrl,
+  forwardToDlq,
+  ShipmentEventTypes,
+} = require('@logisphere/event-contracts');
 const config = require('../config');
 const prisma = require('../database/prisma');
 const eventRepository = require('../repositories/eventRepository');
 const notificationRepository = require('../repositories/notificationRepository');
 const emailService = require('../services/emailService');
-const { ShipmentEventTypes } = require('@logisphere/event-contracts');
 const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('notification-service:notificationEventConsumer');
 
 class NotificationEventConsumer {
   constructor() {
-    this.sqsClient = null;
+    this.sqsClient = createSqsClient(config.sqs);
     this.isRunning = false;
     this.timeoutId = null;
+    this.queueUrl = null;
+    this.dlqUrl = null;
+  }
 
-    if (config.sqs && config.sqs.notificationQueueUrl) {
-      this.sqsClient = new SQSClient({
-        region: config.sqs.region,
-        endpoint: config.sqs.endpoint,
-        credentials: {
-          accessKeyId: config.sqs.accessKeyId,
-          secretAccessKey: config.sqs.secretAccessKey,
-        },
-      });
+  async initializeQueueUrls() {
+    if (this.queueUrl) return this.queueUrl;
+    try {
+      this.queueUrl = await resolveQueueUrl(
+        this.sqsClient,
+        config.sqs.notificationQueueName || 'notification-queue',
+        { explicitUrl: config.sqs.notificationQueueUrl }
+      );
+      this.dlqUrl = await resolveQueueUrl(
+        this.sqsClient,
+        config.sqs.notificationDlqName || 'notification-dlq',
+        { explicitUrl: config.sqs.notificationDlqUrl }
+      );
+      logger.info(
+        `NotificationEventConsumer initialized queue URL: ${this.queueUrl} (DLQ: ${this.dlqUrl})`
+      );
+    } catch (err) {
+      logger.warn(`Could not resolve notification queue URL on initialization: ${err.message}`);
     }
+    return this.queueUrl;
+  }
+
+  async forwardToDeadLetterQueue(messageBody, errorMessage) {
+    await this.initializeQueueUrls();
+    if (!this.sqsClient || !this.dlqUrl) return;
+    return forwardToDlq(this.sqsClient, this.dlqUrl, messageBody, errorMessage);
   }
 
   buildNotificationTemplates(event) {
@@ -266,29 +285,10 @@ class NotificationEventConsumer {
     });
   }
 
-  async forwardToDeadLetterQueue(messageBody, errorMessage) {
-    if (!this.sqsClient || !config.sqs.notificationDlqUrl) return;
-
-    try {
-      const command = new SendMessageCommand({
-        QueueUrl: config.sqs.notificationDlqUrl,
-        MessageBody: JSON.stringify({
-          originalMessage: messageBody,
-          error: errorMessage,
-          failedAt: new Date().toISOString(),
-        }),
-      });
-      await this.sqsClient.send(command);
-      logger.warn(`Forwarded poison message to DLQ: ${config.sqs.notificationDlqUrl}`);
-    } catch (dlqErr) {
-      logger.error(`Failed to forward message to DLQ: ${dlqErr.message}`);
-    }
-  }
-
   start(pollingIntervalMs = 5000) {
     if (this.isRunning) return;
     this.isRunning = true;
-    logger.info(`NotificationEventConsumer started for queue: ${config.sqs.notificationQueueUrl}`);
+    logger.info('NotificationEventConsumer started polling...');
 
     const poll = async () => {
       if (!this.isRunning) return;
@@ -315,11 +315,13 @@ class NotificationEventConsumer {
   }
 
   async pollMessages() {
-    if (!this.sqsClient || !config.sqs.notificationQueueUrl) return;
+    if (!this.sqsClient) return;
+    const queueUrl = await this.initializeQueueUrls();
+    if (!queueUrl) return;
 
     try {
       const command = new ReceiveMessageCommand({
-        QueueUrl: config.sqs.notificationQueueUrl,
+        QueueUrl: queueUrl,
         MaxNumberOfMessages: 10,
         WaitTimeSeconds: 2,
         AttributeNames: ['ApproximateReceiveCount'],
@@ -338,7 +340,7 @@ class NotificationEventConsumer {
 
           // Acknowledge / delete message from queue
           const deleteCmd = new DeleteMessageCommand({
-            QueueUrl: config.sqs.notificationQueueUrl,
+            QueueUrl: queueUrl,
             ReceiptHandle: message.ReceiptHandle,
           });
           await this.sqsClient.send(deleteCmd);
@@ -348,12 +350,15 @@ class NotificationEventConsumer {
             `Failed to process notification message ${message.MessageId} (attempt ${receiveCount}): ${msgError.message}`
           );
 
-          // Route to DLQ if max retries exceeded (3 retries)
-          if (receiveCount >= 3) {
-            await this.forwardToDeadLetterQueue(message.Body, msgError.message);
+          // Route to DLQ if max retries exceeded (3-5 retries) and DLQ available
+          if (receiveCount >= 3 && this.dlqUrl) {
+            await forwardToDlq(this.sqsClient, this.dlqUrl, message.Body, msgError.message, {
+              queueUrl,
+              messageId: message.MessageId,
+            });
             // Delete from main queue after routing to DLQ
             const deleteCmd = new DeleteMessageCommand({
-              QueueUrl: config.sqs.notificationQueueUrl,
+              QueueUrl: queueUrl,
               ReceiptHandle: message.ReceiptHandle,
             });
             await this.sqsClient.send(deleteCmd);

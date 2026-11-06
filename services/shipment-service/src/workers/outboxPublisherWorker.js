@@ -1,4 +1,5 @@
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { SendMessageCommand } = require('@aws-sdk/client-sqs');
+const { createSqsClient, resolveQueueUrl } = require('@logisphere/event-contracts');
 const outboxRepository = require('../repositories/outboxRepository');
 const config = require('../config');
 const { createLogger } = require('@logisphere/logger');
@@ -10,15 +11,7 @@ class OutboxPublisherWorker {
   constructor() {
     this.intervalId = null;
     this.isRunning = false;
-
-    this.sqsClient = new SQSClient({
-      region: config.sqs.region,
-      endpoint: config.sqs.endpoint,
-      credentials: {
-        accessKeyId: config.sqs.accessKeyId,
-        secretAccessKey: config.sqs.secretAccessKey,
-      },
-    });
+    this.sqsClient = createSqsClient(config.sqs);
   }
 
   start(intervalMs = 2000) {
@@ -61,7 +54,10 @@ class OutboxPublisherWorker {
       try {
         // Publish to all target queues
         for (const queueName of targetQueues) {
-          const queueUrl = `${config.sqs.endpoint}/000000000000/${queueName}`;
+          const queueUrl = await resolveQueueUrl(this.sqsClient, queueName);
+          if (!queueUrl) {
+            throw new Error(`Could not resolve queue URL for target queue: ${queueName}`);
+          }
 
           const messageBody = JSON.stringify({
             id: evt.eventId,

@@ -1,9 +1,14 @@
-const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+const { ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+const {
+  createSqsClient,
+  resolveQueueUrl,
+  forwardToDlq,
+  ShipmentEventTypes,
+} = require('@logisphere/event-contracts');
 const config = require('../config');
 const prisma = require('../database/prisma');
 const eventRepository = require('../repositories/eventRepository');
 const trackingRepository = require('../repositories/trackingRepository');
-const { ShipmentEventTypes } = require('@logisphere/event-contracts');
 const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('tracking-service:trackingEventConsumer');
@@ -23,20 +28,33 @@ const EVENT_STATUS_MAP = Object.freeze({
 
 class TrackingEventConsumer {
   constructor() {
-    this.sqsClient = null;
+    this.sqsClient = createSqsClient(config.sqs);
     this.isRunning = false;
     this.timeoutId = null;
+    this.queueUrl = null;
+    this.dlqUrl = null;
+  }
 
-    if (config.sqs && config.sqs.trackingQueueUrl) {
-      this.sqsClient = new SQSClient({
-        region: config.sqs.region,
-        endpoint: config.sqs.endpoint,
-        credentials: {
-          accessKeyId: config.sqs.accessKeyId,
-          secretAccessKey: config.sqs.secretAccessKey,
-        },
-      });
+  async initializeQueueUrls() {
+    if (this.queueUrl) return this.queueUrl;
+    try {
+      this.queueUrl = await resolveQueueUrl(
+        this.sqsClient,
+        config.sqs.trackingQueueName || 'tracking-queue',
+        { explicitUrl: config.sqs.trackingQueueUrl }
+      );
+      this.dlqUrl = await resolveQueueUrl(
+        this.sqsClient,
+        config.sqs.trackingDlqName || 'tracking-dlq',
+        { explicitUrl: config.sqs.trackingDlqUrl }
+      );
+      logger.info(
+        `TrackingEventConsumer initialized queue URL: ${this.queueUrl} (DLQ: ${this.dlqUrl})`
+      );
+    } catch (err) {
+      logger.warn(`Could not resolve tracking queue URL on initialization: ${err.message}`);
     }
+    return this.queueUrl;
   }
 
   async handleDomainEvent(event) {
@@ -62,59 +80,44 @@ class TrackingEventConsumer {
       return true;
     }
 
-    const {
-      shipmentId,
-      trackingNumber,
-      location,
-      latitude,
-      longitude,
-      actorId,
-      reason,
-      notes,
-      metadata,
-    } = payload;
+    const trackingNumber =
+      payload.trackingNumber || (payload.shipmentId ? `TRK-${payload.shipmentId}` : null);
 
-    if (!trackingNumber && !shipmentId) {
-      logger.warn(`Event ${eventId} (${type}) missing trackingNumber/shipmentId. Skipping.`);
+    if (!trackingNumber) {
+      logger.warn(`No trackingNumber found in event payload for ${eventId}`);
       await eventRepository.markEventProcessed(eventId, type);
-      return true;
+      return false;
     }
 
-    const resolvedTrackingNumber = trackingNumber || `TRK-${shipmentId}`;
-    const resolvedLocation = location || payload.pickupHub || payload.originHub || null;
-    const resolvedNotes =
-      reason ||
-      notes ||
-      (type === ShipmentEventTypes.SHIPMENT_CREATED
-        ? 'Consignment registered and offer broadcasted to carrier marketplace'
-        : type === ShipmentEventTypes.SHIPMENT_OFFER_ACCEPTED
-        ? 'Logistics carrier accepted marketplace offer'
-        : type === ShipmentEventTypes.DRIVER_ASSIGNED
-        ? 'Carrier assigned driver and transport vehicle'
-        : null);
-
     return prisma.$transaction(async (tx) => {
+      // 1. Append Tracking Milestone Event
       await trackingRepository.createEvent(
         {
-          trackingNumber: resolvedTrackingNumber,
-          shipmentId: shipmentId || 'UNKNOWN',
+          trackingNumber,
+          shipmentId: payload.shipmentId || null,
           status: mapping.status,
+          notes:
+            payload.notes ||
+            payload.reason ||
+            payload.delayReason ||
+            `Shipment transitioned to ${mapping.status}`,
+          location: payload.location || payload.currentHub || null,
           source: mapping.source,
-          location: resolvedLocation,
-          latitude: latitude || null,
-          longitude: longitude || null,
-          actorId: actorId || null,
-          notes: resolvedNotes,
-          metadata: metadata || null,
+          metadata: {
+            eventId,
+            eventType: type,
+            driverId: payload.driverId || null,
+            vehicleId: payload.vehicleId || null,
+            failureReason: payload.failureReason || null,
+          },
         },
         tx
       );
 
+      // 2. Mark event as processed (Idempotency guarantee)
       await eventRepository.markEventProcessed(eventId, type, tx);
 
-      logger.info(
-        `Appended milestone ${mapping.status} for ${resolvedTrackingNumber} on event ${type}`
-      );
+      logger.info(`Appended milestone ${mapping.status} for ${trackingNumber} on event ${type}`);
       return true;
     });
   }
@@ -122,7 +125,7 @@ class TrackingEventConsumer {
   start(pollingIntervalMs = 5000) {
     if (this.isRunning) return;
     this.isRunning = true;
-    logger.info(`TrackingEventConsumer polling started for queue: ${config.sqs.trackingQueueUrl}`);
+    logger.info('TrackingEventConsumer polling started...');
 
     const poll = async () => {
       if (!this.isRunning) return;
@@ -149,13 +152,16 @@ class TrackingEventConsumer {
   }
 
   async pollMessages() {
-    if (!this.sqsClient || !config.sqs.trackingQueueUrl) return;
+    if (!this.sqsClient) return;
+    const queueUrl = await this.initializeQueueUrls();
+    if (!queueUrl) return;
 
     try {
       const command = new ReceiveMessageCommand({
-        QueueUrl: config.sqs.trackingQueueUrl,
+        QueueUrl: queueUrl,
         MaxNumberOfMessages: 10,
         WaitTimeSeconds: 2,
+        AttributeNames: ['ApproximateReceiveCount'],
       });
 
       const response = await this.sqsClient.send(command);
@@ -169,16 +175,31 @@ class TrackingEventConsumer {
           await this.handleDomainEvent(body);
 
           const deleteCmd = new DeleteMessageCommand({
-            QueueUrl: config.sqs.trackingQueueUrl,
+            QueueUrl: queueUrl,
             ReceiptHandle: message.ReceiptHandle,
           });
           await this.sqsClient.send(deleteCmd);
         } catch (msgError) {
-          logger.error(`Failed to process message ${message.MessageId}: ${msgError.message}`);
+          const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1', 10);
+          logger.error(
+            `Failed to process tracking message ${message.MessageId} (attempt ${receiveCount}): ${msgError.message}`
+          );
+
+          if (receiveCount >= 5 && this.dlqUrl) {
+            await forwardToDlq(this.sqsClient, this.dlqUrl, message.Body, msgError.message, {
+              queueUrl,
+              messageId: message.MessageId,
+            });
+            const deleteCmd = new DeleteMessageCommand({
+              QueueUrl: queueUrl,
+              ReceiptHandle: message.ReceiptHandle,
+            });
+            await this.sqsClient.send(deleteCmd);
+          }
         }
       }
     } catch (err) {
-      logger.warn(`SQS poll warning: ${err.message}`);
+      logger.warn(`SQS poll warning in tracking consumer: ${err.message}`);
     }
   }
 }

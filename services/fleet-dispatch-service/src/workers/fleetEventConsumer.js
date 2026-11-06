@@ -1,31 +1,47 @@
-const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+const { ReceiveMessageCommand, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+const {
+  createSqsClient,
+  resolveQueueUrl,
+  forwardToDlq,
+  ShipmentEventTypes,
+} = require('@logisphere/event-contracts');
 const config = require('../config');
 const prisma = require('../database/prisma');
 const eventRepository = require('../repositories/eventRepository');
 const assignmentRepository = require('../repositories/assignmentRepository');
 const driverRepository = require('../repositories/driverRepository');
 const vehicleRepository = require('../repositories/vehicleRepository');
-const { ShipmentEventTypes } = require('@logisphere/event-contracts');
 const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('fleet-dispatch-service:fleetEventConsumer');
 
 class FleetEventConsumer {
   constructor() {
-    this.sqsClient = null;
+    this.sqsClient = createSqsClient(config.sqs);
     this.isRunning = false;
     this.timeoutId = null;
+    this.queueUrl = null;
+    this.dlqUrl = null;
+  }
 
-    if (config.sqs && config.sqs.fleetQueueUrl) {
-      this.sqsClient = new SQSClient({
-        region: config.sqs.region,
-        endpoint: config.sqs.endpoint,
-        credentials: {
-          accessKeyId: config.sqs.accessKeyId,
-          secretAccessKey: config.sqs.secretAccessKey,
-        },
+  async initializeQueueUrls() {
+    if (this.queueUrl) return this.queueUrl;
+    try {
+      this.queueUrl = await resolveQueueUrl(
+        this.sqsClient,
+        config.sqs.fleetQueueName || 'fleet-queue',
+        { explicitUrl: config.sqs.fleetQueueUrl }
+      );
+      this.dlqUrl = await resolveQueueUrl(this.sqsClient, config.sqs.fleetDlqName || 'fleet-dlq', {
+        explicitUrl: config.sqs.fleetDlqUrl,
       });
+      logger.info(
+        `FleetEventConsumer initialized queue URL: ${this.queueUrl} (DLQ: ${this.dlqUrl})`
+      );
+    } catch (err) {
+      logger.warn(`Could not resolve fleet queue URL on initialization: ${err.message}`);
     }
+    return this.queueUrl;
   }
 
   async handleDomainEvent(event) {
@@ -48,45 +64,50 @@ class FleetEventConsumer {
     if (!shipmentId) {
       logger.warn(`Event ${eventId} (${type}) does not contain shipmentId`);
       await eventRepository.markEventProcessed(eventId, type);
-      return true;
+      return false;
     }
 
-    // Determine target assignment status based on event type
-    let targetAssignmentStatus = null;
-    if (type === ShipmentEventTypes.SHIPMENT_DELIVERED) {
-      targetAssignmentStatus = 'COMPLETED';
-    } else if (
-      type === ShipmentEventTypes.SHIPMENT_CANCELLED ||
-      type === ShipmentEventTypes.DELIVERY_FAILED
-    ) {
-      targetAssignmentStatus = 'CANCELLED';
-    }
+    // Only process terminal events that release driver & vehicle
+    const terminalTypes = [
+      ShipmentEventTypes.SHIPMENT_DELIVERED,
+      ShipmentEventTypes.DELIVERY_FAILED,
+      ShipmentEventTypes.SHIPMENT_CANCELLED,
+    ];
 
-    if (!targetAssignmentStatus) {
-      logger.info(`Event ${type} is not a fleet release trigger. Ignoring.`);
+    if (!terminalTypes.includes(type)) {
       await eventRepository.markEventProcessed(eventId, type);
       return true;
     }
 
     return prisma.$transaction(async (tx) => {
-      // Find active assignment for this shipment
-      const activeAssignment = await assignmentRepository.findActiveByShipment(shipmentId, tx);
-
-      if (activeAssignment) {
-        // Release driver and vehicle
-        await driverRepository.updateStatus(activeAssignment.driverId, 'AVAILABLE', tx);
-        await vehicleRepository.updateStatus(activeAssignment.vehicleId, 'AVAILABLE', tx);
-        await assignmentRepository.updateStatus(activeAssignment.id, targetAssignmentStatus, tx);
-
+      const assignment = await assignmentRepository.findActiveByShipment(shipmentId, tx);
+      if (!assignment) {
         logger.info(
-          `Released fleet assignment ${activeAssignment.id} (driver ${activeAssignment.driverId}, vehicle ${activeAssignment.vehicleId}) on event ${type}`
+          `No active dispatch assignment for shipment ${shipmentId}. Marking event processed.`
         );
-      } else {
-        logger.info(`No active dispatch assignment found for shipment ${shipmentId} upon ${type}`);
+        await eventRepository.markEventProcessed(eventId, type, tx);
+        return true;
       }
 
-      // Record event as processed
+      // 1. Release Vehicle
+      if (assignment.vehicleId) {
+        await vehicleRepository.updateStatus(assignment.vehicleId, 'AVAILABLE', tx);
+      }
+
+      // 2. Release Driver
+      if (assignment.driverId) {
+        await driverRepository.updateStatus(assignment.driverId, 'AVAILABLE', tx);
+      }
+
+      // 3. Mark Assignment Completed or Cancelled
+      const targetStatus =
+        type === ShipmentEventTypes.SHIPMENT_CANCELLED ? 'CANCELLED' : 'COMPLETED';
+      await assignmentRepository.updateStatus(assignment.id, targetStatus, tx);
+
+      // 4. Mark Event Processed for idempotency
       await eventRepository.markEventProcessed(eventId, type, tx);
+
+      logger.info(`Released resources for shipment ${shipmentId} upon event ${type}`);
       return true;
     });
   }
@@ -94,7 +115,7 @@ class FleetEventConsumer {
   start(pollingIntervalMs = 5000) {
     if (this.isRunning) return;
     this.isRunning = true;
-    logger.info(`FleetEventConsumer polling started for queue: ${config.sqs.fleetQueueUrl}`);
+    logger.info('FleetEventConsumer polling started...');
 
     const poll = async () => {
       if (!this.isRunning) return;
@@ -121,13 +142,16 @@ class FleetEventConsumer {
   }
 
   async pollMessages() {
-    if (!this.sqsClient || !config.sqs.fleetQueueUrl) return;
+    if (!this.sqsClient) return;
+    const queueUrl = await this.initializeQueueUrls();
+    if (!queueUrl) return;
 
     try {
       const command = new ReceiveMessageCommand({
-        QueueUrl: config.sqs.fleetQueueUrl,
+        QueueUrl: queueUrl,
         MaxNumberOfMessages: 10,
         WaitTimeSeconds: 2,
+        AttributeNames: ['ApproximateReceiveCount'],
       });
 
       const response = await this.sqsClient.send(command);
@@ -140,19 +164,32 @@ class FleetEventConsumer {
           const body = JSON.parse(message.Body);
           await this.handleDomainEvent(body);
 
-          // Acknowledge / delete message from queue
           const deleteCmd = new DeleteMessageCommand({
-            QueueUrl: config.sqs.fleetQueueUrl,
+            QueueUrl: queueUrl,
             ReceiptHandle: message.ReceiptHandle,
           });
           await this.sqsClient.send(deleteCmd);
         } catch (msgError) {
-          logger.error(`Failed to process message ${message.MessageId}: ${msgError.message}`);
+          const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1', 10);
+          logger.error(
+            `Failed to process fleet message ${message.MessageId} (attempt ${receiveCount}): ${msgError.message}`
+          );
+
+          if (receiveCount >= 5 && this.dlqUrl) {
+            await forwardToDlq(this.sqsClient, this.dlqUrl, message.Body, msgError.message, {
+              queueUrl,
+              messageId: message.MessageId,
+            });
+            const deleteCmd = new DeleteMessageCommand({
+              QueueUrl: queueUrl,
+              ReceiptHandle: message.ReceiptHandle,
+            });
+            await this.sqsClient.send(deleteCmd);
+          }
         }
       }
     } catch (err) {
-      // Quietly log connection failures in local dev/testing
-      logger.warn(`SQS poll warning: ${err.message}`);
+      logger.warn(`SQS poll warning in fleet consumer: ${err.message}`);
     }
   }
 }
