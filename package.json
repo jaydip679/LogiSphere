@@ -16,7 +16,9 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "node scripts/e2e-test.js",
     "db:migrate": "node scripts/migrate-all.js",
+    "db:migrate:neon": "node scripts/migrate-all.js --neon",
     "seed:admin": "node services/auth-service/scripts/seedAdmin.js",
+    "seed:admin:neon": "node services/auth-service/scripts/seedAdmin.js --neon",
     "generate:keys": "node scripts/generate-jwt-keys.js"
   },
   "devDependencies": {
