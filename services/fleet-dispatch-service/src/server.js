@@ -7,8 +7,10 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('fleet-dispatch-service');
 
-const server = app.listen(config.port, () => {
-  logger.info(`Fleet & Dispatch Service listening on port ${config.port} [env: ${config.env}]`);
+const host = process.env.HOST || '127.0.0.1';
+
+const server = app.listen(config.port, host, () => {
+  logger.info(`Fleet & Dispatch Service listening on ${host}:${config.port} [env: ${config.env}]`);
 
   // Start background workers
   reservationTimeoutWorker.start(30000); // Check expired reservations every 30s

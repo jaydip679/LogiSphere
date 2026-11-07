@@ -5,8 +5,10 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('auth-service');
 
-const server = app.listen(config.port, () => {
-  logger.info(`Auth & Organization Service listening on port ${config.port} [env: ${config.env}]`);
+const host = process.env.HOST || '127.0.0.1';
+
+const server = app.listen(config.port, host, () => {
+  logger.info(`Auth & Organization Service listening on ${host}:${config.port} [env: ${config.env}]`);
 });
 
 const gracefulShutdown = async (signal) => {

@@ -8,8 +8,10 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('shipment-service');
 
-const server = app.listen(config.port, () => {
-  logger.info(`Shipment Service listening on port ${config.port} [env: ${config.env}]`);
+const host = process.env.HOST || '127.0.0.1';
+
+const server = app.listen(config.port, host, () => {
+  logger.info(`Shipment Service listening on ${host}:${config.port} [env: ${config.env}]`);
 
   // Start background workers
   offerPollingWorker.start(30000); // Poll expired offers every 30s

@@ -4,8 +4,10 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('api-gateway');
 
-const server = app.listen(config.port, () => {
-  logger.info(`LogiSphere API Gateway listening on port ${config.port} [env: ${config.env}]`);
+const host = process.env.HOST || '0.0.0.0';
+
+const server = app.listen(config.port, host, () => {
+  logger.info(`LogiSphere API Gateway listening on ${host}:${config.port} [env: ${config.env}]`);
   logger.info(`Routing targets:`);
   Object.entries(config.services).forEach(([name, url]) => {
     logger.info(`  • ${name.padEnd(12)} -> ${url}`);

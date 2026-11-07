@@ -36,7 +36,7 @@ if (fs.existsSync(path.join(ROOT_DIR, '.env'))) {
 const MAX_RSS_LIMIT_MB = 512;
 const WARN_RSS_THRESHOLD_MB = 400;
 const CRITICAL_RSS_THRESHOLD_MB = 460;
-const V8_OLD_SPACE_SIZE_MB = 60;
+const V8_OLD_SPACE_SIZE_MB = 35;
 
 // Port assignments
 const PORT = parseInt(process.env.PORT, 10) || 10000;
@@ -58,6 +58,7 @@ const SERVICES = [
     schema: 'app_auth',
     env: {
       PORT: String(PORTS.AUTH),
+      HOST: '127.0.0.1',
       NOTIFICATION_SERVICE_URL: `http://127.0.0.1:${PORTS.NOTIFICATION}`,
     },
   },
@@ -68,6 +69,7 @@ const SERVICES = [
     schema: 'shipment',
     env: {
       PORT: String(PORTS.SHIPMENT),
+      HOST: '127.0.0.1',
       AUTH_SERVICE_URL: `http://127.0.0.1:${PORTS.AUTH}`,
       FLEET_SERVICE_URL: `http://127.0.0.1:${PORTS.FLEET}`,
     },
@@ -79,6 +81,7 @@ const SERVICES = [
     schema: 'fleet',
     env: {
       PORT: String(PORTS.FLEET),
+      HOST: '127.0.0.1',
       SHIPMENT_SERVICE_URL: `http://127.0.0.1:${PORTS.SHIPMENT}`,
     },
   },
@@ -89,6 +92,7 @@ const SERVICES = [
     schema: 'tracking',
     env: {
       PORT: String(PORTS.TRACKING),
+      HOST: '127.0.0.1',
     },
   },
   {
@@ -98,6 +102,7 @@ const SERVICES = [
     schema: 'notification',
     env: {
       PORT: String(PORTS.NOTIFICATION),
+      HOST: '127.0.0.1',
     },
   },
   {
@@ -107,6 +112,7 @@ const SERVICES = [
     isGateway: true,
     env: {
       PORT: String(PORTS.GATEWAY),
+      HOST: '0.0.0.0',
       AUTH_SERVICE_URL: `http://127.0.0.1:${PORTS.AUTH}`,
       SHIPMENT_SERVICE_URL: `http://127.0.0.1:${PORTS.SHIPMENT}`,
       FLEET_SERVICE_URL: `http://127.0.0.1:${PORTS.FLEET}`,
@@ -224,10 +230,19 @@ async function waitForHealth(service, maxWaitSeconds = 60) {
 
 function getServiceDbUrl(baseUrl, schema) {
   if (!baseUrl || !schema) return undefined;
-  if (baseUrl.includes('schema=')) {
-    return baseUrl.replace(/schema=[^&]+/, `schema=${schema}`);
+  let url = baseUrl;
+  if (url.includes('schema=')) {
+    url = url.replace(/schema=[^&]+/, `schema=${schema}`);
+  } else if (url.includes('?')) {
+    url = `${url}&schema=${schema}`;
+  } else {
+    url = `${url}?schema=${schema}`;
   }
-  return baseUrl.includes('?') ? `${baseUrl}&schema=${schema}` : `${baseUrl}?schema=${schema}`;
+  // Trim per-service pool size to reduce Prisma engine binary memory footprint
+  if (!url.includes('connection_limit=')) {
+    url += '&connection_limit=2';
+  }
+  return url;
 }
 
 // ====================================================================
@@ -236,7 +251,12 @@ function getServiceDbUrl(baseUrl, schema) {
 function spawnService(service) {
   if (isShuttingDown) return;
 
-  const args = [`--max-old-space-size=${V8_OLD_SPACE_SIZE_MB}`, service.entry];
+  const args = [
+    '--optimize-for-size',
+    `--max-old-space-size=${V8_OLD_SPACE_SIZE_MB}`,
+    '--max-semi-space-size=2',
+    service.entry,
+  ];
 
   const serviceDbUrl = service.schema
     ? getServiceDbUrl(process.env.DATABASE_URL, service.schema)
