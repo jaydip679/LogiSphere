@@ -26,10 +26,10 @@ if (isNeon) {
     process.exit(1);
   }
 
-  if (process.env.NEON_DATABASE_URL) {
+  if (!process.env.DATABASE_URL && process.env.NEON_DATABASE_URL) {
     process.env.DATABASE_URL = process.env.NEON_DATABASE_URL;
   }
-  if (process.env.NEON_DIRECT_URL) {
+  if (!process.env.DIRECT_URL && process.env.NEON_DIRECT_URL) {
     process.env.DIRECT_URL = process.env.NEON_DIRECT_URL;
   }
 } else {
@@ -62,8 +62,9 @@ const runMigrations = () => {
     try {
       // Determine service-specific DATABASE_URL targeting the dedicated PostgreSQL schema
       const schemaEnvKey = `DATABASE_URL_${service.schema.toUpperCase()}`;
-      let serviceDbUrl = process.env[schemaEnvKey];
-      if (!serviceDbUrl && service.schema === 'app_auth') {
+      const useBaseUrlOnly = isNeon || process.env.FORCE_BASE_DB_URL === 'true';
+      let serviceDbUrl = !useBaseUrlOnly ? process.env[schemaEnvKey] : null;
+      if (!useBaseUrlOnly && !serviceDbUrl && service.schema === 'app_auth') {
         serviceDbUrl = process.env.DATABASE_URL_AUTH;
       }
 
@@ -84,8 +85,8 @@ const runMigrations = () => {
 
       // Determine service-specific DIRECT_URL for unpooled DDL operations (Neon/PgBouncer)
       const directSchemaEnvKey = `DIRECT_URL_${service.schema.toUpperCase()}`;
-      let serviceDirectUrl = process.env[directSchemaEnvKey];
-      if (!serviceDirectUrl && service.schema === 'app_auth') {
+      let serviceDirectUrl = !useBaseUrlOnly ? process.env[directSchemaEnvKey] : null;
+      if (!useBaseUrlOnly && !serviceDirectUrl && service.schema === 'app_auth') {
         serviceDirectUrl = process.env.DIRECT_URL_AUTH;
       }
 
@@ -109,6 +110,15 @@ const runMigrations = () => {
         fs.existsSync(migrationsDir) &&
         fs.readdirSync(migrationsDir).filter((f) => !f.startsWith('.')).length > 0;
 
+      if (isNeon) {
+        const ensureConnectTimeout = (url) => {
+          if (!url || url.includes('connect_timeout=')) return url;
+          return url.includes('?') ? `${url}&connect_timeout=30` : `${url}?connect_timeout=30`;
+        };
+        serviceDbUrl = ensureConnectTimeout(serviceDbUrl);
+        serviceDirectUrl = ensureConnectTimeout(serviceDirectUrl);
+      }
+
       let command;
       if (mode === 'dev') {
         command = 'npx prisma migrate dev';
@@ -118,16 +128,33 @@ const runMigrations = () => {
         command = 'npx prisma db push --skip-generate';
       }
 
-      execSync(command, {
-        cwd: serviceDir,
-        stdio: 'inherit',
-        env: {
-          ...process.env,
-          DATABASE_URL: serviceDbUrl,
-          DIRECT_URL: serviceDirectUrl,
-          DATABASE_SCHEMA: service.schema,
-        },
-      });
+      let attempts = 0;
+      let success = false;
+      while (attempts < 3 && !success) {
+        attempts++;
+        try {
+          execSync(command, {
+            cwd: serviceDir,
+            stdio: 'inherit',
+            env: {
+              ...process.env,
+              DATABASE_URL: serviceDbUrl,
+              DIRECT_URL: serviceDirectUrl,
+              DATABASE_SCHEMA: service.schema,
+            },
+          });
+          success = true;
+        } catch (err) {
+          if (attempts < 3 && (err.message.includes('P1001') || isNeon)) {
+            console.warn(
+              `[WARN] Connection paused during Neon compute wake-up. Retrying in 3s (attempt ${attempts}/3)...`
+            );
+            execSync('node -e "setTimeout(() => {}, 3000)"');
+          } else {
+            throw err;
+          }
+        }
+      }
       console.info(`✓ Successfully migrated ${service.name} (${service.schema})`);
     } catch (error) {
       console.error(`✗ Migration failed for ${service.name} (${service.schema}): ${error.message}`);

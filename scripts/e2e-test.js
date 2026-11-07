@@ -167,7 +167,7 @@ async function runE2ETests() {
     );
 
     // Verify carrier email
-    const authServiceDirectUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:5001';
+    const authServiceDirectUrl = process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001';
     await axios.post(
       `${authServiceDirectUrl}/api/v1/internal/users/verify-email`,
       { email: companyEmail },
