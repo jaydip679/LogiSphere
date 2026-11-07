@@ -46,10 +46,10 @@ const parseOrigins = (raw) => {
     .filter(Boolean);
 };
 
-// Trusted Vercel preview domain pattern for this project (defaults to logisphere-*.vercel.app)
+// Trusted Vercel preview domain pattern for this project (matches logisphere*.vercel.app, e.g. logisphereapp.vercel.app)
 const previewPattern = process.env.VERCEL_PROJECT_PREVIEW_PATTERN
   ? new RegExp(process.env.VERCEL_PROJECT_PREVIEW_PATTERN)
-  : /^https:\/\/logisphere(-[a-zA-Z0-9_-]+)?\.vercel\.app$/;
+  : /^https:\/\/logisphere[a-zA-Z0-9_-]*\.vercel\.app$/;
 
 const config = {
   env: process.env.NODE_ENV || 'development',

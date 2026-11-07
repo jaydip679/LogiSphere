@@ -84,6 +84,14 @@ describe('API Gateway — Security & Shielding Tests', () => {
       expect(res.headers['access-control-allow-origin']).toBe(
         'https://logisphere-preview-branch.vercel.app'
       );
+
+      const resProd = await request(app)
+        .get('/health')
+        .set('Origin', 'https://logisphereapp.vercel.app');
+
+      expect(resProd.headers['access-control-allow-origin']).toBe(
+        'https://logisphereapp.vercel.app'
+      );
     });
 
     it('rejects requests from untrusted third-party origins', async () => {

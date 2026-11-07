@@ -1,219 +1,282 @@
-# LogiSphere
+# 🌐 LogiSphere — Cloud-Native Logistics & Supply Chain Orchestration Platform
 
-LogiSphere is an enterprise-grade, B2B2C logistics and supply chain orchestration platform that connects individual and business customers with vetted logistics carriers. The platform features an intelligent 15-minute cascade marketplace matching engine, atomic fleet dispatch management, real-time milestone-based GPS tracking, and reliable event-driven notifications.
+LogiSphere is an enterprise-grade, B2B2C logistics and supply chain orchestration platform that connects individual and business shippers with vetted logistics carriers. Designed India-first (incorporating 6-digit Indian PIN codes, transit hubs, INR paise pricing, and domestic phone formats), the platform features an **intelligent 15-minute cascade marketplace matching engine**, **atomic 2-minute fleet dispatch reservations**, **real-time milestone-based GPS tracking simulation**, and **reliable event-driven notifications**.
 
----
+Built with **React 18, Vite, Node.js, Express, Neon Serverless PostgreSQL, Prisma ORM, AWS SQS, Docker, Render, and Vercel**, LogiSphere emphasizes strict microservice domain boundaries, event-driven decoupling, zero cross-schema database queries, asymmetric cryptographic security, and cloud-native memory efficiency.
 
-## 1. System Architecture
+### 🔗 Links
 
-LogiSphere is built as a cloud-native microservices architecture orchestrated via Docker Compose (and designed for Kubernetes/kind deployment):
+- 🌐 **Live Demo (Frontend):** [https://logisphereapp.vercel.app](https://logisphereapp.vercel.app)
+- ⚡ **API Gateway (Backend):** [https://logisphere-api.onrender.com/health](https://logisphere-api.onrender.com/health)
+- 🐙 **GitHub Repository:** [https://github.com/jaydip679/LogiSphere](https://github.com/jaydip679/LogiSphere)
 
-```
-                                  [ Web Application ]
-                                   (React + Vite :3000)
-                                            │
+<br>
+
+## 🛠️ Technology Stack
+
+| Category                   | Technology                                                                                                   |
+| :------------------------- | :----------------------------------------------------------------------------------------------------------- |
+| 🎨 **Frontend**            | React 18, Vite, Tailwind CSS, Lucide React, React Router 6, TanStack Query Polling                           |
+| ⚙️ **Backend**             | Node.js 20+, Express.js (Microservices Architecture)                                                         |
+| 🚪 **API Gateway**         | Express Reverse Proxy, Request Correlation IDs, Route Shielding, Rate Limiting                               |
+| 🗄️ **Database**            | Neon Serverless PostgreSQL (5 Isolated Schemas: `app_auth`, `shipment`, `fleet`, `tracking`, `notification`) |
+| 🔗 **ORM & Migrations**    | Prisma ORM (Independent schemas, Prisma Client factories, centralized migration runner)                      |
+| 🔐 **Authentication**      | Asymmetric RS256 JWT (Private key held strictly in `auth-service`, public key downstream)                    |
+| 📬 **Messaging & Queue**   | AWS SQS (`ap-south-1`) with dedicated Dead-Letter Queues (LocalStack 3.0 for local dev)                      |
+| 🔄 **Reliability**         | Transactional Outbox Pattern with automatic background polling publisher                                     |
+| 📧 **Notifications**       | Gmail REST API (OAuth 2.0) with automated fallback mock provider                                             |
+| 📊 **Logging & Telemetry** | Structured Winston JSON logger, active memory telemetry (`/proc/status` RSS monitor)                         |
+| 🐳 **DevOps & Containers** | Docker, Multi-stage Dockerfiles (non-root `node`), Docker Compose, GitHub Actions                            |
+| 🌍 **Deployment**          | Vercel (Edge CDN Frontend), Render (Unified In-Process Microservices Backend)                                |
+| 🧪 **Automated Testing**   | Jest, Supertest (146+ unit tests across all workspaces + 40-assertion E2E test suite)                        |
+
+<br>
+
+## 🏗️ System Architecture
+
+LogiSphere follows a decentralized cloud-native microservices architecture. Client traffic enters exclusively through the **API Gateway** over TLS, which validates tokens, injects correlation IDs, shields internal routes (`/internal/*` blocked with 404), and proxies requests to isolated domain services over internal loopback. Asynchronous domain events are routed via **AWS SQS** through dedicated consumer queues.
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                CLIENT & FRONTEND LAYER                                 │
+│                                                                                        │
+│                          React 18 + Vite + Tailwind CSS (Vercel)                       │
+│                                                                                        │
+│   Landing Page • Consignment Tracking • Customer Portal • Carrier Desk • Admin Console │
+└───────────────────────────────────────────┬────────────────────────────────────────────┘
+                                            │  HTTPS / Bearer JWT
                                             ▼
-                                   [ API Gateway ]
-                              (Express Reverse Proxy :5000)
-                                            │
-         ┌──────────────────┬───────────────┼───────────────┬──────────────────┐
-         ▼                  ▼               ▼               ▼                  ▼
-  [ Auth Service ]  [ Shipment Service]  [ Fleet Service ]  [ Tracking Service]  [ Notification ]
-       (:5001)           (:5002)             (:5003)             (:5004)             (:5005)
-         │                  │                   │                   │                   │
-         └──────────────────┼───────────────────┼───────────────────┼───────────────────┘
-                            │                   │                   │
-                            ▼                   ▼                   ▼
-                  [ PostgreSQL 15 ]      [ LocalStack SQS ]    [ In-App Inbox ]
-                 (5 Isolated Schemas)    (Async Event Bus)    (Failsafe Logger)
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                              PUBLIC INGRESS & API GATEWAY                              │
+│                                                                                        │
+│                        Express Reverse Proxy (:10000 / Render)                         │
+│                                                                                        │
+│   CORS Enforcement • RS256 Pre-Validation • Correlation IDs • Internal Route Shielding  │
+└───────┬───────────────────┬───────────────────┬───────────────────┬────────────────────┘
+        │                   │                   │                   │
+        │ HTTP (127.0.0.1)  │ HTTP (127.0.0.1)  │ HTTP (127.0.0.1)  │ HTTP (127.0.0.1)
+        ▼                   ▼                   ▼                   ▼
+┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌───────────────┐   ┌────────────────┐
+│  Auth Service │   │Shipment Serv. │   │ Fleet Service │   │Tracking Serv. │   │ Notification   │
+│    (:5001)    │   │    (:5002)    │   │    (:5003)    │   │    (:5004)    │   │    (:5005)     │
+│               │   │               │   │               │   │               │   │                │
+│ • RBAC Auth   │   │ • Lifecycle   │   │ • Fleet Reg.  │   │ • Waypoints   │   │ • SQS Consumer │
+│ • Multi-Tenant│   │ • Cascade Eng.│   │ • Atomic Res. │   │ • GPS Sim.    │   │ • In-App Inbox │
+│ • RS256 Sign  │   │ • Haversine   │   │ • Capacity    │   │ • Chronology  │   │ • Gmail OAuth  │
+│ • Onboarding  │   │ • Outbox Pub. │   │ • 2-min Lock  │   │ • Idempotent  │   │ • DLQ Redrive  │
+└───────┬───────┘   └───────┬───────┘   └───────┬───────┘   └───────┬───────┘   └────────┬───────┘
+        │                   │                   │                   │                    │
+        │                   │ Transactional     │ SQS Consumer      │ SQS Consumer       │ SQS Consumer
+        │                   │ Outbox Events     │                   │                    │
+        │                   ▼                   ▼                   ▼                    ▼
+        │         ┌────────────────────────────────────────────────────────────────────────┐
+        │         │              EVENT BUS & MESSAGING LAYER (AWS SQS)                     │
+        │         │                                                                        │
+        │         │ • logisphere-fleet-queue        (+ DLQ & redrive)                      │
+        │         │ • logisphere-tracking-queue     (+ DLQ & redrive)                      │
+        │         │ • logisphere-notification-queue (+ DLQ & redrive)                      │
+        └──────┐  └────────────────────────────────────────────────────────────────────────┘
+               │
+               ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        DATA PERSISTENCE LAYER (Neon PostgreSQL)                        │
+│                                                                                        │
+│               Universal Multi-Schema Isolation (Zero Cross-Schema Joins)               │
+│                                                                                        │
+│   Schema: app_auth │ Schema: shipment │ Schema: fleet │ Schema: tracking │ Schema: notif │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Microservices
+<br>
 
-| Service                  | Port   | Database Schema | Primary Responsibilities                                                                                                                         |
-| ------------------------ | ------ | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **API Gateway**          | `5000` | N/A             | Reverse proxy routing, rate limiting, correlation IDs, RS256 JWT pre-validation, internal route shielding (`/internal/*`).                       |
-| **Auth Service**         | `5001` | `auth`          | Multi-tenant auth, RS256 JWT issuance, organization onboarding, carrier compliance review, role-based access control.                            |
-| **Shipment Service**     | `5002` | `shipment`      | Consignment lifecycle authority, Indian pin-code pricing engine, transactional outbox worker, 15-min marketplace matching engine, CSV reporting. |
-| **Fleet & Dispatch**     | `5003` | `fleet`         | Vehicle & driver registry, capacity validation, 2-minute atomic dispatch reservations, reservation timeout worker.                               |
-| **Tracking Service**     | `5004` | `tracking`      | Milestone timeline projections, Indian corridor waypoint simulator, idempotent SQS event consumer.                                               |
-| **Notification Service** | `5005` | `notification`  | Multi-channel customer notifications, SQS consumer with dead-letter queue (DLQ) redrive, in-app notification inbox.                              |
-| **Web Application**      | `3000` | N/A             | React 18 SPA with Tailwind CSS, Shipsy-inspired SaaS landing page, public tracking portal, and role-specific operational dashboards.             |
+## ✨ Project Highlights
+
+- ⏱️ **15-Minute Cascade Matching Engine:** Broadcasts orders sequentially to qualified carriers with a strict 15-minute response window before cascading to next-best carriers.
+- 🔒 **2-Minute Atomic Fleet Dispatch:** Prevents vehicle and driver double-booking via atomic 2-minute pending reservations with automatic background expiration and rollback.
+- 📐 **Haversine Distance & Dynamic Pricing:** India-specific hub-to-hub matrix (Mumbai, Delhi NCR, Bengaluru, Hyderabad, Chennai) calculated in integer paise to eliminate floating-point rounding errors.
+- 🛰️ **Waypoint Route Simulator:** Simulates real-time transit telemetry along major Indian freight corridors with dynamic progress projection and milestone mapping.
+- ⚡ **High-Efficiency In-Process Supervisor:** Runs all 6 backend services in an embedded Node.js process on Render, cutting RAM from **614 MB down to ~132 MB (26%)** without breaking microservice port boundaries.
+- 🛡️ **Asymmetric Cryptography (RS256):** Private RSA key is strictly locked inside `auth-service`; all downstream services verify tokens using a decoupled public key.
+- 📦 **Transactional Outbox Pattern:** Guarantees reliable event publishing to AWS SQS without dual-write inconsistencies during database transactions.
+- 🗄️ **Zero Cross-Schema Queries:** Five isolated PostgreSQL schemas (`app_auth`, `shipment`, `fleet`, `tracking`, `notification`) with independent Prisma migrations.
+- 📄 **Ephemeral CSV Reporting:** On-demand analytics reports delivered with signed tokens and automatically deleted by a background worker after a 5-minute TTL.
+- 🧪 **Enterprise Test Suite:** 146+ unit tests across all workspace packages and a 40-assertion master E2E integration runner exercising the full end-to-end business flow.
+
+<br>
+
+## 🧭 Core Portals & User Roles
+
+LogiSphere provides a unified web experience with role-based portal routing:
+
+- **👑 Platform Administrator (`PLATFORM_ADMIN`)**  
+  Review and approve pending carrier onboarding applications, inspect system-wide consignment volumes, verify carrier compliance, and monitor infrastructure health.
+
+- **🏢 Logistics Carrier Owner (`COMPANY_OWNER`)**  
+  Carrier dashboard to review broadcasted marketplace consignment offers, accept/decline within the 15-minute countdown window, and monitor company revenue.
+
+- **📋 Logistics Dispatcher (`DISPATCHER`)**  
+  Operational control center to manage trucks, assign active drivers, and execute 2-minute atomic dispatch reservations against accepted consignments.
+
+- **🚚 Delivery Driver (`DRIVER`)**  
+  Mobile-responsive cockpit for drivers to accept dispatches, inspect cargo details, and advance shipment milestones (`PICKED_UP` $\rightarrow$ `IN_TRANSIT` $\rightarrow$ `OUT_FOR_DELIVERY` $\rightarrow$ `DELIVERED`).
+
+- **📦 Shippers & Customers (`CUSTOMER`)**
+  - **Individual:** Instant shipping rate calculation, doorstep pickup scheduling, and live tracking.
+  - **Business:** High-volume consignment booking, organization billing, and downloadable CSV analytics reports.
+
+- **🔍 Public Consignment Tracking (No Login Required)**  
+  Instant public tracking page providing milestone chronologies, route visualizer, and estimated delivery dates.
+
+<br>
+
+## ⚙️ Engineering Deep Dives
 
 ---
 
-## 2. Supported User Roles & Portals
+### ⏱️ 15-Minute Cascade Marketplace Matching
 
-1. **Platform Administrator (`ADMIN`):** Approves/rejects carrier onboarding applications, monitors platform health, and views system-wide analytics.
-2. **Logistics Company Owner (`COMPANY_OWNER`):** Manages carrier profile, reviews 15-minute marketplace broadcast offers, and assigns operational dispatchers and drivers.
-3. **Logistics Dispatcher (`DISPATCHER`):** Manages vehicles and drivers, executes 2-minute atomic dispatch reservations against accepted consignments.
-4. **Delivery Driver (`DRIVER`):** Mobile-optimized portal to review active assigned consignments, progress milestones (`PICKED_UP` → `IN_TRANSIT` → `OUT_FOR_DELIVERY` → `DELIVERED`), and report exceptions.
-5. **Individual Customer (`CUSTOMER` - `INDIVIDUAL`):** Dynamic shipping fee calculation, booking consignments, and live milestone tracking with 6-second polling telemetry.
-6. **Business Customer (`CUSTOMER` - `BUSINESS`):** High-volume bulk booking, organization billing, and downloadable CSV analytics reports with 5-minute auto-expiry.
+When a shipment is booked, `shipment-service` scores eligible carriers based on service area coverage and available vehicle capacity retrieved via internal APIs (`GET /internal/organizations/coverage` and `GET /internal/fleet/capacity`). The top-ranked carrier receives an exclusive 15-minute acceptance window. A background polling worker runs every 30 seconds; if the carrier does not accept in time, the offer expires and cascades automatically to the next eligible carrier.
 
 ---
 
-## 3. Technology Stack
+### 🔒 2-Minute Atomic Fleet Dispatch Reservations
 
-- **Backend:** Node.js (>= 18), Express, Prisma ORM (v5 multi-schema).
-- **Frontend:** React 18, Vite, Tailwind CSS, Lucide Icons.
-- **Database:** PostgreSQL 15 (5 isolated logical schemas: `auth`, `shipment`, `fleet`, `tracking`, `notification`).
-- **Security:** Asymmetric RSA-256 JWT (private signing in Auth Service, public key verification downstream), bcrypt password hashing, correlation IDs.
-- **Messaging:** Event-driven architecture with AWS SQS (emulated locally via LocalStack 3.0).
-- **Containerization:** Multi-stage Dockerfiles (running as unprivileged `node` user), Nginx SPA frontend, Docker Compose orchestration with automated health checks.
+Assigning a consignment requires reserving both a driver and a vehicle. To prevent race conditions in multi-dispatcher environments, `fleet-dispatch-service` creates a `PENDING` reservation holding the resources for exactly 2 minutes. When `shipment-service` confirms the assignment, the reservation transitions to `CONFIRMED`. If the reservation expires or is aborted, a background worker automatically releases the resources back to the pool.
 
 ---
 
-## 4. Getting Started
+### 🗄️ Universal Multi-Schema Cloud Database
+
+To ensure clean domain separation and cloud portability across local Docker and Neon Serverless PostgreSQL, LogiSphere partitions data into 5 distinct logical schemas within a single database:
+
+- `app_auth`: Users, organizations, refresh tokens, audit logs.
+- `shipment`: Consignments, items, marketplace offers, transactional outbox.
+- `fleet`: Vehicles, drivers, dispatch reservations, capacity logs.
+- `tracking`: Milestone events, simulated GPS waypoints, telemetry logs.
+- `notification`: In-app notification inbox, delivery receipts, dead-letter records.
+
+---
+
+### ⚡ Render In-Process Microservices Orchestration
+
+To operate the entire backend on Render's 512 MB free tier, `scripts/render-orchestrator.js` mounts all 6 microservices within a single Node.js runtime with `--optimize-for-size --max-old-space-size=40`:
+
+- Preserves distinct HTTP ports (`127.0.0.1:5001-5005` and `0.0.0.0:10000`).
+- Internal services bind strictly to loopback (`127.0.0.1`), ensuring Render only opens port `10000`.
+- Shared V8 memory drops total physical RSS from **~614 MB down to ~132 MB (26%)**, leaving abundant headroom.
+
+---
+
+### 🔐 Asymmetric Cryptographic JWT Security (RS256)
+
+- The 2048-bit RSA **private key** is strictly confined to `auth-service` for token issuance.
+- The API Gateway and downstream services consume only the **public key** (`jwt-public.key`) to cryptographically verify signatures and unpack tenant IDs and user roles independently.
+
+<br>
+
+## 💻 Local Development
+
+LogiSphere can be launched locally using **Docker Compose** (recommended for complete multi-container orchestration) or manually via npm workspaces.
 
 ### Prerequisites
 
-- **Node.js** >= 18.0.0 and **npm** >= 9.0.0
-- **Docker** and **Docker Compose**
-
-### Step-by-Step Local Setup
-
-#### 1. Clone & Install Dependencies
-
-```bash
-git clone <repository-url>
-cd LogiSphere
-npm install
-```
-
-#### 2. Generate RSA-256 JWT Keypair
-
-Auth Service requires an RSA private key to sign JWTs, and downstream services verify tokens with the public key:
-
-```bash
-npm run generate:keys
-```
-
-#### 3. Configure Environment Variables
-
-Copy the root environment template:
-
-```bash
-cp .env.example .env
-```
-
-_(On Windows PowerShell, use: `Copy-Item .env.example .env`)_
-
-#### 4. Launch Full Stack with Docker Compose
-
-```bash
-docker compose up -d --build
-```
-
-This starts all 10 containers in dependency order:
-
-1. `postgres` (initializes database and health checks)
-2. `localstack` (provisions SQS queues and dead-letter queues)
-3. `db-migrate` (runs Prisma migrations across all 5 schemas and seeds the bootstrap Platform Admin)
-4. Microservices (`auth-service`, `shipment-service`, `fleet-dispatch-service`, `tracking-service`, `notification-service`)
-5. `api-gateway` (reverse proxy entry point)
-6. `web-app` (frontend UI)
-
-#### 5. Verify Stack Health
-
-Check container status:
-
-```bash
-docker compose ps
-```
-
-Probe the API Gateway aggregated health check:
-
-```bash
-curl http://localhost:5000/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "UP",
-  "downstream": {
-    "auth": "UP",
-    "shipment": "UP",
-    "fleet": "UP",
-    "tracking": "UP",
-    "notification": "UP"
-  }
-}
-```
+- **Node.js** >= 18.0.0
+- **npm** >= 9.0.0
+- **Docker** & **Docker Compose**
 
 ---
 
-## 5. Automated Testing
+### 🐳 Docker Compose Setup (Recommended)
 
-### Linting & Formatting
+1. **Clone the repository:**
+
+   ```bash
+   git clone https://github.com/jaydip679/LogiSphere.git
+   cd LogiSphere
+   ```
+
+2. **Generate RSA Keypair & Environment:**
+
+   ```bash
+   npm install
+   npm run generate:keys
+   cp .env.example .env
+   ```
+
+3. **Start the 10-Container Stack:**
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Verify Health:**
+   ```bash
+   curl http://localhost:5000/health
+   ```
+   Open `http://localhost:3000` in your browser.
+
+---
+
+### 🛠️ Manual Workspaces Setup
+
+1. **Install all workspace dependencies:**
+
+   ```bash
+   npm install
+   ```
+
+2. **Run database migrations across all 5 schemas:**
+
+   ```bash
+   npm run db:generate
+   npm run db:migrate
+   npm run seed:admin
+   ```
+
+3. **Start the backend orchestrator:**
+
+   ```bash
+   npm start
+   ```
+
+4. **Start the frontend application:**
+   ```bash
+   npm run dev --workspace=@logisphere/web-app
+   ```
+
+<br>
+
+## 🧪 Automated Testing
+
+LogiSphere enforces automated testing across all workspaces:
 
 ```bash
-# Check code style and lint rules
+# Run unit tests across all 6 services and shared packages (146+ tests)
+npm run test
+
+# Run code style & lint checks
 npm run lint
 
-# Check Prettier formatting
-npm run format:check
-```
-
-### End-to-End (E2E) Test Suite
-
-Execute the comprehensive end-to-end test suite that exercises the entire business flow across all microservices:
-
-```bash
+# Run automated end-to-end integration test suite
 npm run test:e2e
 ```
 
-The test suite automates:
+<br>
 
-1. API Gateway aggregated downstream health verification.
-2. Platform Admin sign-in.
-3. Logistics carrier onboarding (`PENDING_REVIEW` → Admin `APPROVED`).
-4. Driver staff provisioning and vehicle registration.
-5. Customer registration and dynamic route price calculation.
-6. Consignment creation and broadcast offer matching.
-7. Carrier offer acceptance and atomic dispatch reservation.
-8. Driver milestone progression (`PICKED_UP` → `IN_TRANSIT` → `OUT_FOR_DELIVERY` → `DELIVERED`).
-9. Real-time tracking verification and customer in-app notification assertion.
+## 🔑 Demo Credentials
 
----
+| Role                       | Email                                                                                               | Password                |
+| :------------------------- | :-------------------------------------------------------------------------------------------------- | :---------------------- |
+| **Platform Administrator** | `admin@logisphere.local`                                                                            | `Admin@LogiSphere2026!` |
+| **New Customer / Carrier** | Register via [https://logisphereapp.vercel.app/register](https://logisphereapp.vercel.app/register) | Self-registered         |
 
-## 6. Project Directory Layout
+<br>
 
-```
-LogiSphere/
-├── docker/                     # Dockerfiles & LocalStack initialization scripts
-│   ├── migration.Dockerfile    # Consolidated multi-schema Prisma migration runner
-│   └── localstack/             # SQS queue & DLQ provisioning scripts
-├── frontend/
-│   └── web-app/                # React 18 + Tailwind CSS single page application
-├── scripts/
-│   ├── e2e-test.js             # Full automated multi-role E2E test suite
-│   ├── generate-jwt-keys.js    # RSA-256 keypair generator
-│   └── migrate-all.js          # Centralized multi-schema Prisma migration runner
-├── services/
-│   ├── api-gateway/            # Port 5000 - Express reverse proxy
-│   ├── auth-service/           # Port 5001 - Auth, RBAC & Organization management
-│   ├── fleet-dispatch-service/ # Port 5003 - Vehicle, driver & atomic dispatch reservations
-│   ├── notification-service/   # Port 5005 - Customer notifications & SQS consumer
-│   ├── shipment-service/       # Port 5002 - Pricing, orders, marketplace matching engine
-│   └── tracking-service/       # Port 5004 - Milestone timelines & waypoint simulation
-├── shared/
-│   ├── common-utils/           # Shared error handlers, responses, and Zod validators
-│   ├── event-contracts/        # Shared SQS event schemas & routing keys
-│   ├── keys/                   # Asymmetric JWT public key
-│   └── logger/                 # Winston structured JSON logger
-├── .env.example                # Root environment configuration reference
-├── docker-compose.yml          # 10-container local orchestration configuration
-└── package.json                # Monorepo workspaces & root scripts
-```
+## 📄 License
 
----
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
-## 7. Default Credentials (Local Development)
+## 👨‍💻 Author
 
-| Role                       | Email                                         | Password                  |
-| -------------------------- | --------------------------------------------- | ------------------------- |
-| **Platform Administrator** | `admin@logisphere.local`                      | `AdminSecurePassword123!` |
-| **New Accounts**           | Register via `http://localhost:3000/register` | User defined              |
+**Jaydip Chaudhari**  
+[GitHub](https://github.com/jaydip679) · [LinkedIn](https://linkedin.com/in/jaydip679)
