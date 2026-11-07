@@ -6,24 +6,24 @@ const dotenv = require('dotenv');
 const isNeon =
   process.argv.includes('--neon') ||
   process.env.TARGET_DB === 'neon' ||
-  process.env.USE_NEON === 'true';
+  process.env.USE_NEON === 'true' ||
+  (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech'));
 
 if (isNeon) {
   const neonEnvPath = path.resolve(__dirname, '../../../.env.neon');
   if (fs.existsSync(neonEnvPath)) {
     dotenv.config({ path: neonEnvPath, override: true });
     console.info('[BOOTSTRAP] Target database: Neon Serverless PostgreSQL (.env.neon loaded)');
+  } else if (process.env.DATABASE_URL) {
+    console.info('[BOOTSTRAP] Target database: Neon Serverless PostgreSQL (using environment DATABASE_URL)');
   } else {
-    console.error(`✗ [BOOTSTRAP ERROR] .env.neon not found at ${neonEnvPath}`);
+    console.error(`✗ [BOOTSTRAP ERROR] .env.neon not found at ${neonEnvPath} and DATABASE_URL is not set.`);
     process.exit(1);
   }
 
-  const rawUrl = process.env.NEON_DATABASE_URL || '';
+  const rawUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || '';
   if (rawUrl.includes('YOUR-ENDPOINT') || rawUrl.includes('USER:PASSWORD')) {
-    console.error('✗ [BOOTSTRAP ERROR] .env.neon still contains placeholder values.');
-    console.error(
-      '  Please replace them with your actual Neon database credentials in .env.neon before running with --neon.'
-    );
+    console.error('✗ [BOOTSTRAP ERROR] DATABASE_URL still contains placeholder values.');
     process.exit(1);
   }
 
