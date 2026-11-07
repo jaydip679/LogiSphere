@@ -128,14 +128,18 @@ class EmailService {
       // Failsafe: Never throw unhandled exceptions from email dispatch
       logger.error(`Failed to send email to ${to}: ${error.message}`);
 
-      await notificationLogRepository.createLog({
-        eventId,
-        channel: 'EMAIL',
-        recipient: to,
-        status: 'FAILED',
-        subject,
-        error: error.message,
-      });
+      try {
+        await notificationLogRepository.createLog({
+          eventId,
+          channel: 'EMAIL',
+          recipient: to,
+          status: 'FAILED',
+          subject,
+          error: error.message,
+        });
+      } catch (logError) {
+        logger.error(`Failed to record failed email audit log: ${logError.message}`);
+      }
 
       return { success: false, error: error.message };
     }

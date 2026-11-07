@@ -103,10 +103,12 @@ class ShipmentService {
       return created;
     });
 
-    // Trigger initial marketplace matching asynchronously
-    matchingEngine.matchAndOfferShipment(shipment.id).catch((err) => {
-      logger.error(`Initial matching trigger failed for shipment ${shipment.id}: ${err.message}`);
-    });
+    // Trigger initial marketplace matching
+    try {
+      await matchingEngine.matchAndOfferShipment(shipment.id);
+    } catch (err) {
+      logger.error('Initial matching trigger failed for shipment ' + shipment.id + ': ' + err.message);
+    }
 
     return shipment;
   }

@@ -7,12 +7,13 @@ const logger = createLogger('shipment-service:authClient');
 class AuthClient {
   async getOrganizationsCoverage(hub) {
     try {
-      const url = `${config.authServiceUrl}/internal/organizations/coverage?hub=${encodeURIComponent(hub)}`;
+      const hubParam = hub ? `?hub=${encodeURIComponent(hub)}` : '';
+      const url = `${config.authServiceUrl}/internal/organizations/coverage${hubParam}`;
       const res = await axios.get(url, {
         headers: {
           'x-internal-service-key': config.internalServiceKey,
         },
-        timeout: 3000,
+        timeout: 5000,
       });
 
       if (res.data && res.data.success) {
@@ -20,7 +21,7 @@ class AuthClient {
       }
       return [];
     } catch (error) {
-      logger.warn(`Failed to fetch coverage from auth-service: ${error.message}`);
+      logger.warn(`Failed to fetch coverage from auth-service (${error.message}) for hub: ${hub}`);
       return [];
     }
   }

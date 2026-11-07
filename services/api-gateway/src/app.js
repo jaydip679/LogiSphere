@@ -12,10 +12,27 @@ const errorHandler = require('./middlewares/errorMiddleware');
 
 const app = express();
 
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (config.corsOrigins.includes(origin) || config.corsOrigins.includes('*')) {
+    return true;
+  }
+  if (config.corsPreviewPattern && config.corsPreviewPattern.test(origin)) {
+    return true;
+  }
+  return false;
+};
+
 app.use(helmet());
 app.use(
   cors({
-    origin: config.corsOrigins,
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy: Origin ${origin} not allowed`));
+      }
+    },
     credentials: true,
   })
 );

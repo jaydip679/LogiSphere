@@ -4,7 +4,13 @@ const registrationNumberRegex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$/i;
 
 const createDriverSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  phone: z.string().optional().default(''),
+  phone: z
+    .string()
+    .refine((val) => !val || /^(?:\+91[\-\s]?)?[6789]\d{9}$/.test(val), {
+      message: 'Invalid Indian phone number format (e.g. +919876543210 or 9876543210)',
+    })
+    .optional()
+    .default(''),
   licenseNumber: z
     .string()
     .min(5, 'Driving license number must be at least 5 characters')

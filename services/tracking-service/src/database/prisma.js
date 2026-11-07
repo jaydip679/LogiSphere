@@ -1,4 +1,10 @@
-const { PrismaClient } = require('@prisma/client');
+let PrismaClient;
+try {
+  ({ PrismaClient } = require('@prisma/client-tracking'));
+} catch {
+  ({ PrismaClient } = require('@prisma/client'));
+}
+
 const config = require('../config');
 
 const prisma = new PrismaClient({

@@ -4,12 +4,20 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-let privateKey = process.env.JWT_PRIVATE_KEY || null;
-let publicKey = process.env.JWT_PUBLIC_KEY || null;
+let privateKey = process.env.JWT_PRIVATE_KEY
+  ? process.env.JWT_PRIVATE_KEY.replace(/\\n/g, '\n')
+  : null;
+let publicKey = process.env.JWT_PUBLIC_KEY
+  ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n')
+  : null;
 
 const resolveKeyPath = (envPath, defaultRelPath) => {
   if (!envPath) return path.resolve(__dirname, defaultRelPath);
-  return path.isAbsolute(envPath) ? envPath : path.resolve(__dirname, '../../', envPath);
+  if (path.isAbsolute(envPath)) return envPath;
+  if (fs.existsSync(path.resolve(process.cwd(), envPath))) {
+    return path.resolve(process.cwd(), envPath);
+  }
+  return path.resolve(__dirname, '../../', envPath);
 };
 
 const privateKeyPath = resolveKeyPath(

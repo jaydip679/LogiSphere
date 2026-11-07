@@ -170,7 +170,7 @@ class MatchingEngine {
         offer: newOffer,
         selectedOrg: selected.org,
       };
-    });
+    }, { maxWait: 15000, timeout: 30000 });
   }
 }
 

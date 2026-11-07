@@ -18,13 +18,18 @@ const publicKeyPath = resolveKeyPath(
   '../../../../shared/keys/jwt-public.key'
 );
 
-let publicKey = null;
-try {
-  if (fs.existsSync(publicKeyPath)) {
-    publicKey = fs.readFileSync(publicKeyPath, 'utf8');
+let publicKey = process.env.JWT_PUBLIC_KEY
+  ? process.env.JWT_PUBLIC_KEY.replace(/\\n/g, '\n')
+  : null;
+
+if (!publicKey) {
+  try {
+    if (fs.existsSync(publicKeyPath)) {
+      publicKey = fs.readFileSync(publicKeyPath, 'utf8');
+    }
+  } catch (err) {
+    console.warn(`[CONFIG WARNING] Could not load RSA public key: ${err.message}`);
   }
-} catch (err) {
-  console.warn(`[CONFIG WARNING] Could not load RSA public key: ${err.message}`);
 }
 
 const config = {

@@ -37,7 +37,7 @@ const errorHandler = (err, req, res, _next) => {
 
   return sendError(
     res,
-    process.env.NODE_ENV === 'production' ? 'An unexpected internal error occurred' : err.message,
+    err.message,
     HttpStatus.INTERNAL_SERVER_ERROR,
     'INTERNAL_SERVER_ERROR'
   );

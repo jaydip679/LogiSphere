@@ -68,4 +68,30 @@ describe('API Gateway — Security & Shielding Tests', () => {
       expect(res.body.error.code).toBe('TOKEN_INVALID');
     });
   });
+
+  describe('CORS Origin Restriction', () => {
+    it('allows requests from configured origin', async () => {
+      const res = await request(app).get('/health').set('Origin', 'http://localhost:3000');
+
+      expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    });
+
+    it('allows requests from trusted LogiSphere Vercel preview domain', async () => {
+      const res = await request(app)
+        .get('/health')
+        .set('Origin', 'https://logisphere-preview-branch.vercel.app');
+
+      expect(res.headers['access-control-allow-origin']).toBe(
+        'https://logisphere-preview-branch.vercel.app'
+      );
+    });
+
+    it('rejects requests from untrusted third-party origins', async () => {
+      const res = await request(app)
+        .get('/health')
+        .set('Origin', 'https://malicious-phishing-site.com');
+
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    });
+  });
 });

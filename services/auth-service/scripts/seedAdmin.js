@@ -27,7 +27,7 @@ if (isNeon) {
     process.exit(1);
   }
 
-  let neonUrl = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
+  let neonUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
   if (neonUrl) {
     if (neonUrl.includes('schema=')) {
       neonUrl = neonUrl.replace(/schema=[^&]+/, 'schema=app_auth');
