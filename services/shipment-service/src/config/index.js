@@ -32,18 +32,48 @@ if (!publicKey) {
   }
 }
 
+const getDatabaseUrl = (schema, fallback) => {
+  const isCloudOrForced =
+    process.env.TARGET_DB === 'neon' ||
+    process.env.USE_NEON === 'true' ||
+    process.env.FORCE_BASE_DB_URL === 'true' ||
+    (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech'));
+
+  if (!isCloudOrForced) {
+    const specific = process.env[`DATABASE_URL_${schema.toUpperCase()}`];
+    if (specific) return specific;
+  }
+
+  const base = process.env.DATABASE_URL;
+  if (!base) return fallback;
+  let url = base;
+  if (url.includes('schema=')) {
+    url = url.replace(/schema=[^&]+/, `schema=${schema}`);
+  } else if (url.includes('?')) {
+    url = `${url}&schema=${schema}`;
+  } else {
+    url = `${url}?schema=${schema}`;
+  }
+  if (!url.includes('connection_limit=')) {
+    url += '&connection_limit=2';
+  }
+  return url;
+};
+
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 5002,
-  databaseUrl:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=shipment',
+  port: parseInt(process.env.PORT_SHIPMENT || process.env.PORT, 10) || 5002,
+  host: process.env.HOST_SHIPMENT || process.env.HOST || '127.0.0.1',
+  databaseUrl: getDatabaseUrl(
+    'shipment',
+    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=shipment'
+  ),
   jwt: {
     publicKey,
     algorithm: 'RS256',
   },
-  authServiceUrl: process.env.AUTH_SERVICE_URL || 'http://localhost:5001',
-  fleetServiceUrl: process.env.FLEET_SERVICE_URL || 'http://localhost:5003',
+  authServiceUrl: process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001',
+  fleetServiceUrl: process.env.FLEET_SERVICE_URL || 'http://127.0.0.1:5003',
   internalServiceKey: process.env.INTERNAL_SERVICE_KEY || 'dev_internal_secret_key',
   sqs: {
     region: process.env.AWS_REGION || 'ap-south-1',

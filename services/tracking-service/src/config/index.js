@@ -32,13 +32,43 @@ if (!publicKey) {
   }
 }
 
+const getDatabaseUrl = (schema, fallback) => {
+  const isCloudOrForced =
+    process.env.TARGET_DB === 'neon' ||
+    process.env.USE_NEON === 'true' ||
+    process.env.FORCE_BASE_DB_URL === 'true' ||
+    (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech'));
+
+  if (!isCloudOrForced) {
+    const specific = process.env[`DATABASE_URL_${schema.toUpperCase()}`];
+    if (specific) return specific;
+  }
+
+  const base = process.env.DATABASE_URL;
+  if (!base) return fallback;
+  let url = base;
+  if (url.includes('schema=')) {
+    url = url.replace(/schema=[^&]+/, `schema=${schema}`);
+  } else if (url.includes('?')) {
+    url = `${url}&schema=${schema}`;
+  } else {
+    url = `${url}?schema=${schema}`;
+  }
+  if (!url.includes('connection_limit=')) {
+    url += '&connection_limit=2';
+  }
+  return url;
+};
+
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 5004,
-  databaseUrl:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=tracking',
-  shipmentServiceUrl: process.env.SHIPMENT_SERVICE_URL || 'http://localhost:5002',
+  port: parseInt(process.env.PORT_TRACKING || process.env.PORT, 10) || 5004,
+  host: process.env.HOST_TRACKING || process.env.HOST || '127.0.0.1',
+  databaseUrl: getDatabaseUrl(
+    'tracking',
+    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=tracking'
+  ),
+  shipmentServiceUrl: process.env.SHIPMENT_SERVICE_URL || 'http://127.0.0.1:5002',
   jwt: {
     publicKey,
     algorithm: 'RS256',

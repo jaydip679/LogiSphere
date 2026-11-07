@@ -32,12 +32,42 @@ if (!publicKey) {
   }
 }
 
+const getDatabaseUrl = (schema, fallback) => {
+  const isCloudOrForced =
+    process.env.TARGET_DB === 'neon' ||
+    process.env.USE_NEON === 'true' ||
+    process.env.FORCE_BASE_DB_URL === 'true' ||
+    (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('neon.tech'));
+
+  if (!isCloudOrForced) {
+    const specific = process.env[`DATABASE_URL_${schema.toUpperCase()}`];
+    if (specific) return specific;
+  }
+
+  const base = process.env.DATABASE_URL;
+  if (!base) return fallback;
+  let url = base;
+  if (url.includes('schema=')) {
+    url = url.replace(/schema=[^&]+/, `schema=${schema}`);
+  } else if (url.includes('?')) {
+    url = `${url}&schema=${schema}`;
+  } else {
+    url = `${url}?schema=${schema}`;
+  }
+  if (!url.includes('connection_limit=')) {
+    url += '&connection_limit=2';
+  }
+  return url;
+};
+
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT, 10) || 5005,
-  databaseUrl:
-    process.env.DATABASE_URL ||
-    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=notification',
+  port: parseInt(process.env.PORT_NOTIFICATION || process.env.PORT, 10) || 5005,
+  host: process.env.HOST_NOTIFICATION || process.env.HOST || '127.0.0.1',
+  databaseUrl: getDatabaseUrl(
+    'notification',
+    'postgresql://postgres:postgres@localhost:5432/logisphere?schema=notification'
+  ),
   jwt: {
     publicKey,
     algorithm: 'RS256',

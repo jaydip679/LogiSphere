@@ -61,11 +61,11 @@ const config = {
     algorithm: 'RS256',
   },
   services: {
-    auth: process.env.AUTH_SERVICE_URL || 'http://localhost:5001',
-    shipment: process.env.SHIPMENT_SERVICE_URL || 'http://localhost:5002',
-    fleet: process.env.FLEET_SERVICE_URL || 'http://localhost:5003',
-    tracking: process.env.TRACKING_SERVICE_URL || 'http://localhost:5004',
-    notification: process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:5005',
+    auth: process.env.AUTH_SERVICE_URL || 'http://127.0.0.1:5001',
+    shipment: process.env.SHIPMENT_SERVICE_URL || 'http://127.0.0.1:5002',
+    fleet: process.env.FLEET_SERVICE_URL || 'http://127.0.0.1:5003',
+    tracking: process.env.TRACKING_SERVICE_URL || 'http://127.0.0.1:5004',
+    notification: process.env.NOTIFICATION_SERVICE_URL || 'http://127.0.0.1:5005',
   },
 };
 

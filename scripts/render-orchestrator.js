@@ -168,6 +168,22 @@ function getProcessRssMB(pid) {
 }
 
 function sampleSystemMemory() {
+  if (runningProcesses.size === 0) {
+    const mem = process.memoryUsage();
+    const rss = Math.round(mem.rss / (1024 * 1024));
+    const heap = Math.round(mem.heapUsed / (1024 * 1024));
+    const percentOfLimit = Math.round((rss / MAX_RSS_LIMIT_MB) * 100);
+    const logMsg = `[MEMORY TELEMETRY] Total RSS: ${rss}MB / ${MAX_RSS_LIMIT_MB}MB (${percentOfLimit}%) | V8 Heap: ${heap}MB | High-Efficiency Unified In-Process Architecture`;
+    if (rss >= CRITICAL_RSS_THRESHOLD_MB) {
+      console.error(`\x1b[31m[CRITICAL MEMORY ALERT] ${logMsg}\x1b[0m`);
+    } else if (rss >= WARN_RSS_THRESHOLD_MB) {
+      console.warn(`\x1b[33m[MEMORY WARNING] ${logMsg}\x1b[0m`);
+    } else {
+      console.log(`\x1b[32m${logMsg}\x1b[0m`);
+    }
+    return rss;
+  }
+
   const orchRss = Math.round(process.memoryUsage().rss / (1024 * 1024));
   let totalChildRss = 0;
   const breakdown = [];
@@ -439,7 +455,78 @@ async function main() {
   // 1. Run migrations if configured
   runDatabaseMigrations();
 
-  // 2. Spawn 5 downstream microservices sequentially
+  const mode = process.env.ORCHESTRATOR_MODE || 'embedded';
+
+  if (mode === 'embedded') {
+    console.log(
+      '[ORCHESTRATOR] Architecture Mode: High-Efficiency Unified In-Process (RAM budget: <200MB)\n'
+    );
+
+    const servers = [];
+    console.log('[ORCHESTRATOR] Booting auth-service on 127.0.0.1:5001...');
+    const auth = require('../services/auth-service/src/server');
+    servers.push({ name: 'auth-service', server: auth, port: PORTS.AUTH });
+
+    console.log('[ORCHESTRATOR] Booting shipment-service on 127.0.0.1:5002...');
+    const shipment = require('../services/shipment-service/src/server');
+    servers.push({ name: 'shipment-service', server: shipment, port: PORTS.SHIPMENT });
+
+    console.log('[ORCHESTRATOR] Booting fleet-dispatch-service on 127.0.0.1:5003...');
+    const fleet = require('../services/fleet-dispatch-service/src/server');
+    servers.push({ name: 'fleet-dispatch-service', server: fleet, port: PORTS.FLEET });
+
+    console.log('[ORCHESTRATOR] Booting tracking-service on 127.0.0.1:5004...');
+    const tracking = require('../services/tracking-service/src/server');
+    servers.push({ name: 'tracking-service', server: tracking, port: PORTS.TRACKING });
+
+    console.log('[ORCHESTRATOR] Booting notification-service on 127.0.0.1:5005...');
+    const notification = require('../services/notification-service/src/server');
+    servers.push({ name: 'notification-service', server: notification, port: PORTS.NOTIFICATION });
+
+    // Wait for all 5 downstream services to report healthy
+    for (const s of servers) {
+      const healthy = await waitForHealth(s, 30);
+      if (healthy) {
+        console.log(`[ORCHESTRATOR] ✓ ${s.name} is UP on port ${s.port}`);
+      } else {
+        console.warn(`[ORCHESTRATOR WARNING] ${s.name} health probe timed out on port ${s.port}`);
+      }
+    }
+
+    // Boot API Gateway on public ingress port
+    console.log(`\n[ORCHESTRATOR] Starting API Gateway on public ingress port ${PORT}...`);
+    const gateway = require('../services/api-gateway/src/server');
+    servers.push({ name: 'api-gateway', server: gateway, port: PORT });
+
+    const gatewayHealthy = await waitForHealth({ port: PORT }, 30);
+    if (gatewayHealthy) {
+      console.log(
+        `[ORCHESTRATOR] ✓ API Gateway is UP and accepting public traffic on 0.0.0.0:${PORT}\n`
+      );
+    } else {
+      console.warn(`[ORCHESTRATOR WARNING] API Gateway health probe timed out on port ${PORT}.\n`);
+    }
+
+    // Coordinated graceful shutdown
+    const handleShutdown = async (sig) => {
+      console.log(`\n[ORCHESTRATOR] Received ${sig}. Gracefully shutting down all microservice servers...`);
+      if (telemetryTimer) clearInterval(telemetryTimer);
+      for (const s of servers) {
+        if (s.server && s.server.close) {
+          s.server.close();
+        }
+      }
+      setTimeout(() => process.exit(0), 1000);
+    };
+    process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+    process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+    sampleSystemMemory();
+    telemetryTimer = setInterval(sampleSystemMemory, 25000);
+    return;
+  }
+
+  // 2. Spawn 5 downstream microservices sequentially (multi-process mode)
   const downstreamServices = SERVICES.filter((s) => !s.isGateway);
   for (const svc of downstreamServices) {
     spawnService(svc);
