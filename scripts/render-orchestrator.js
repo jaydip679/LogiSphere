@@ -462,6 +462,26 @@ async function main() {
       '[ORCHESTRATOR] Architecture Mode: High-Efficiency Unified In-Process (RAM budget: <200MB)\n'
     );
 
+    // Explicitly guarantee downstream ports and loopback bindings
+    process.env.PORT_AUTH = String(PORTS.AUTH);
+    process.env.HOST_AUTH = '127.0.0.1';
+    process.env.PORT_SHIPMENT = String(PORTS.SHIPMENT);
+    process.env.HOST_SHIPMENT = '127.0.0.1';
+    process.env.PORT_FLEET = String(PORTS.FLEET);
+    process.env.HOST_FLEET = '127.0.0.1';
+    process.env.PORT_TRACKING = String(PORTS.TRACKING);
+    process.env.HOST_TRACKING = '127.0.0.1';
+    process.env.PORT_NOTIFICATION = String(PORTS.NOTIFICATION);
+    process.env.HOST_NOTIFICATION = '127.0.0.1';
+    process.env.PORT_GATEWAY = String(PORT);
+    process.env.HOST_GATEWAY = '0.0.0.0';
+
+    process.env.AUTH_SERVICE_URL = `http://127.0.0.1:${PORTS.AUTH}`;
+    process.env.SHIPMENT_SERVICE_URL = `http://127.0.0.1:${PORTS.SHIPMENT}`;
+    process.env.FLEET_SERVICE_URL = `http://127.0.0.1:${PORTS.FLEET}`;
+    process.env.TRACKING_SERVICE_URL = `http://127.0.0.1:${PORTS.TRACKING}`;
+    process.env.NOTIFICATION_SERVICE_URL = `http://127.0.0.1:${PORTS.NOTIFICATION}`;
+
     const servers = [];
     console.log('[ORCHESTRATOR] Booting auth-service on 127.0.0.1:5001...');
     const auth = require('../services/auth-service/src/server');

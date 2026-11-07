@@ -62,8 +62,8 @@ const getDatabaseUrl = (schema, fallback) => {
 
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT_TRACKING || process.env.PORT, 10) || 5004,
-  host: process.env.HOST_TRACKING || process.env.HOST || '127.0.0.1',
+  port: parseInt(process.env.PORT_TRACKING, 10) || 5004,
+  host: process.env.HOST_TRACKING || '127.0.0.1',
   databaseUrl: getDatabaseUrl(
     'tracking',
     'postgresql://postgres:postgres@localhost:5432/logisphere?schema=tracking'

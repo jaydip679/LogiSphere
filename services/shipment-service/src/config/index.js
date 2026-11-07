@@ -62,8 +62,8 @@ const getDatabaseUrl = (schema, fallback) => {
 
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT_SHIPMENT || process.env.PORT, 10) || 5002,
-  host: process.env.HOST_SHIPMENT || process.env.HOST || '127.0.0.1',
+  port: parseInt(process.env.PORT_SHIPMENT, 10) || 5002,
+  host: process.env.HOST_SHIPMENT || '127.0.0.1',
   databaseUrl: getDatabaseUrl(
     'shipment',
     'postgresql://postgres:postgres@localhost:5432/logisphere?schema=shipment'

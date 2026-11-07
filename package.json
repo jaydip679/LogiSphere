@@ -16,6 +16,7 @@
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "node scripts/e2e-test.js",
     "test:e2e:neon": "node scripts/e2e-neon-runner.js",
+    "start": "node --optimize-for-size --max-old-space-size=40 scripts/render-orchestrator.js",
     "start:render": "node --optimize-for-size --max-old-space-size=40 scripts/render-orchestrator.js",
     "db:generate": "node scripts/generate-all.js",
     "db:migrate": "node scripts/migrate-all.js",

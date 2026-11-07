@@ -62,8 +62,8 @@ const getDatabaseUrl = (schema, fallback) => {
 
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT_NOTIFICATION || process.env.PORT, 10) || 5005,
-  host: process.env.HOST_NOTIFICATION || process.env.HOST || '127.0.0.1',
+  port: parseInt(process.env.PORT_NOTIFICATION, 10) || 5005,
+  host: process.env.HOST_NOTIFICATION || '127.0.0.1',
   databaseUrl: getDatabaseUrl(
     'notification',
     'postgresql://postgres:postgres@localhost:5432/logisphere?schema=notification'

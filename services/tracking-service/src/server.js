@@ -6,7 +6,7 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('tracking-service');
 
-const host = process.env.HOST || '127.0.0.1';
+const host = config.host || '127.0.0.1';
 
 const server = app.listen(config.port, host, () => {
   logger.info(`Tracking Service listening on ${host}:${config.port} [env: ${config.env}]`);

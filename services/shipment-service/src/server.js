@@ -8,7 +8,7 @@ const { createLogger } = require('@logisphere/logger');
 
 const logger = createLogger('shipment-service');
 
-const host = process.env.HOST || '127.0.0.1';
+const host = config.host || '127.0.0.1';
 
 const server = app.listen(config.port, host, () => {
   logger.info(`Shipment Service listening on ${host}:${config.port} [env: ${config.env}]`);

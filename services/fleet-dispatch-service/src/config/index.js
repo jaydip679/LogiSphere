@@ -62,8 +62,8 @@ const getDatabaseUrl = (schema, fallback) => {
 
 const config = {
   env: process.env.NODE_ENV || 'development',
-  port: parseInt(process.env.PORT_FLEET || process.env.PORT, 10) || 5003,
-  host: process.env.HOST_FLEET || process.env.HOST || '127.0.0.1',
+  port: parseInt(process.env.PORT_FLEET, 10) || 5003,
+  host: process.env.HOST_FLEET || '127.0.0.1',
   databaseUrl: getDatabaseUrl(
     'fleet',
     'postgresql://postgres:postgres@localhost:5432/logisphere?schema=fleet'
