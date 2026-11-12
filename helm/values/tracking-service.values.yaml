@@ -1,0 +1,56 @@
+# ==============================================================================
+# LogiSphere — Production Values: Tracking Service
+# Target: Amazon EKS (ap-south-1 Mumbai)
+# ==============================================================================
+
+replicaCount: 1
+
+image:
+  # ECR Repository URL from Terraform output 'ecr_repository_urls["tracking-service"]'
+  repository: "<AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/logisphere-tracking-service"
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 5004
+  targetPort: 5004
+
+# IRSA IAM Role for AWS SQS tracking event processing
+serviceAccount:
+  create: true
+  annotations:
+    # Role ARN from Terraform output 'microservices_sqs_role_arn'
+    eks.amazonaws.com/role-arn: "arn:aws:iam::<AWS_ACCOUNT_ID>:role/logisphere-production-microservices-sqs-role"
+
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: PORT_TRACKING
+    value: "5004"
+  - name: HOST_TRACKING
+    value: "0.0.0.0"
+  - name: AWS_REGION
+    value: "ap-south-1"
+  - name: QUEUE_PREFIX
+    value: "logisphere-eks-"
+  - name: SQS_ENV_PREFIX
+    value: "logisphere-eks-"
+  - name: TARGET_DB
+    value: "neon"
+  - name: USE_NEON
+    value: "true"
+  - name: SHIPMENT_SERVICE_URL
+    value: "http://shipment-service.logisphere.svc.cluster.local:5002"
+
+# Injects pooled DATABASE_URL (for tracking schema), INTERNAL_SERVICE_KEY, and JWT_PUBLIC_KEY
+# NO JWT private key; NO direct unpooled URL
+envFrom:
+  - secretRef:
+      name: tracking-service-secrets
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false

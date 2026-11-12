@@ -1,0 +1,70 @@
+# ==============================================================================
+# LogiSphere — Production Values: Auth & Organization Service
+# Target: Amazon EKS (ap-south-1 Mumbai)
+# ==============================================================================
+
+replicaCount: 1
+
+image:
+  # ECR Repository URL injected dynamically from Terraform output 'ecr_repository_urls["auth-service"]'
+  repository: "<AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/logisphere-auth-service"
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 5001
+  targetPort: 5001
+
+# Auth Service does not directly access SQS; no IRSA role required
+serviceAccount:
+  create: true
+  annotations: {}
+
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: PORT_AUTH
+    value: "5001"
+  - name: HOST_AUTH
+    value: "0.0.0.0"
+  - name: TARGET_DB
+    value: "neon"
+  - name: USE_NEON
+    value: "true"
+  - name: NOTIFICATION_SERVICE_URL
+    value: "http://notification-service.logisphere.svc.cluster.local:5005"
+  # Points directly to the mounted RSA private key path inside the container
+  - name: JWT_PRIVATE_KEY_PATH
+    value: "secrets/jwt-private.key"
+
+# Injects pooled DATABASE_URL (for app_auth schema) and INTERNAL_SERVICE_KEY
+envFrom:
+  - secretRef:
+      name: auth-service-secrets
+
+# ------------------------------------------------------------------------------
+# Asymmetric RSA Key Mount (Strict Isolation)
+# Mounts jwt-private.key and jwt-public.key as read-only files from Kubernetes Secret.
+# The private key is mounted EXCLUSIVELY into auth-service.
+# ------------------------------------------------------------------------------
+volumes:
+  - name: jwt-keys
+    secret:
+      secretName: auth-service-jwt-keys
+      items:
+        - key: jwt-private.key
+          path: jwt-private.key
+        - key: jwt-public.key
+          path: jwt-public.key
+
+volumeMounts:
+  - name: jwt-keys
+    mountPath: /app/services/auth-service/secrets
+    readOnly: true
+
+ingress:
+  enabled: false
+
+autoscaling:
+  enabled: false

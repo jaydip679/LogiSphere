@@ -1,0 +1,76 @@
+# ==============================================================================
+# LogiSphere — Production Values: API Gateway
+# Target: Amazon EKS (ap-south-1 Mumbai)
+# ==============================================================================
+
+replicaCount: 1
+
+image:
+  # ECR Repository URL injected dynamically from Terraform output 'ecr_repository_urls["api-gateway"]'
+  repository: "<AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/logisphere-api-gateway"
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 5000
+  targetPort: 5000
+
+# API Gateway does not access SQS directly; no IRSA role required
+serviceAccount:
+  create: true
+  annotations: {}
+
+env:
+  - name: NODE_ENV
+    value: "production"
+  - name: PORT
+    value: "5000"
+  - name: HOST
+    value: "0.0.0.0"
+  - name: CORS_ORIGIN
+    value: "https://logisphereapp.vercel.app"
+  - name: AUTH_SERVICE_URL
+    value: "http://auth-service.logisphere.svc.cluster.local:5001"
+  - name: SHIPMENT_SERVICE_URL
+    value: "http://shipment-service.logisphere.svc.cluster.local:5002"
+  - name: FLEET_SERVICE_URL
+    value: "http://fleet-dispatch-service.logisphere.svc.cluster.local:5003"
+  - name: TRACKING_SERVICE_URL
+    value: "http://tracking-service.logisphere.svc.cluster.local:5004"
+  - name: NOTIFICATION_SERVICE_URL
+    value: "http://notification-service.logisphere.svc.cluster.local:5005"
+
+# Injects JWT_PUBLIC_KEY only (for request signature pre-validation; NO private key)
+envFrom:
+  - secretRef:
+      name: api-gateway-secrets
+
+# ------------------------------------------------------------------------------
+# Public AWS Application Load Balancer Ingress (Single Public Entrypoint)
+# ------------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: "alb"
+  annotations:
+    alb.ingress.kubernetes.io/scheme: "internet-facing"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # ACM Certificate ARN injected dynamically via --set during deployment
+    alb.ingress.kubernetes.io/certificate-arn: "<ACM_CERTIFICATE_ARN>"
+    alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-port: "traffic-port"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+
+# Initially disabled until Metrics Server is verified in Phase 2
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
