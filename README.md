@@ -263,12 +263,14 @@ npm run test:e2e
 
 <br>
 
-## 🔑 Demo Credentials
+## 🔑 Initial Credentials & Access
 
-| Role                       | Email                                                                                               | Password                |
-| :------------------------- | :-------------------------------------------------------------------------------------------------- | :---------------------- |
-| **Platform Administrator** | `admin@logisphere.local`                                                                            | `Admin@LogiSphere2026!` |
-| **New Customer / Carrier** | Register via [https://logisphereapp.vercel.app/register](https://logisphereapp.vercel.app/register) | Self-registered         |
+| Role                       | Email                                                                                               | Password                                                              |
+| :------------------------- | :-------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------- |
+| **Platform Administrator** | `admin@logisphere.local`                                                                            | Set via `ADMIN_INITIAL_PASSWORD` in `.env` (or generated during seed) |
+| **New Customer / Carrier** | Register via [https://logisphereapp.vercel.app/register](https://logisphereapp.vercel.app/register) | Self-registered                                                       |
+
+> **Security Notice:** Do not commit actual admin passwords or access keys to version control. Production and demo admin passwords must be supplied via secure environment variables (`ADMIN_INITIAL_PASSWORD`) and rotated periodically.
 
 <br>
 

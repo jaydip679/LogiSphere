@@ -160,7 +160,7 @@ async function runNeonValidation() {
         TARGET_DB: 'neon',
         USE_NEON: 'true',
         ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@logisphere.local',
-        ADMIN_INITIAL_PASSWORD: process.env.ADMIN_INITIAL_PASSWORD || 'Admin@LogiSphere2026!',
+        ADMIN_INITIAL_PASSWORD: process.env.ADMIN_INITIAL_PASSWORD || 'TestAdminValidationPass123!',
       },
     });
     console.log(`${green('✓')} Platform Admin seeded on validation branch.`);
