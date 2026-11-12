@@ -1,0 +1,32 @@
+# ==============================================================================
+# LogiSphere — Platform Values: Kubernetes Metrics Server
+# Chart: metrics-server/metrics-server (https://kubernetes-sigs.github.io/metrics-server/)
+# Pinned Chart Version: 3.12.2 (Application Version: v0.7.2)
+# Target: Amazon EKS (ap-south-1 Mumbai)
+# ==============================================================================
+
+# Single replica for cost and capacity efficiency on worker nodes
+replicas: 1
+
+# Arguments configured for Amazon EKS
+# In AWS VPC CNI, InternalIP selects the node's private VPC IP address for routing.
+# Secure TLS verification remains strictly enabled (no --kubelet-insecure-tls flag).
+args:
+  - --cert-dir=/tmp
+  - --secure-port=4443
+  - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+  - --kubelet-use-node-status-port
+  - --metric-resolution=15s
+
+# Compute resources calibrated for minimal node reservation
+resources:
+  requests:
+    cpu: 20m
+    memory: 50Mi
+  limits:
+    cpu: 50m
+    memory: 100Mi
+
+# Pod Disruption Budget disabled for single-replica demo deployment
+podDisruptionBudget:
+  enabled: false

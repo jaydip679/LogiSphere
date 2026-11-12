@@ -1,0 +1,125 @@
+# ==============================================================================
+# LogiSphere — Platform Values: Lightweight Monitoring Stack
+# Chart: prometheus-community/kube-prometheus-stack
+# Pinned Chart Version: 69.8.2 (Prometheus v3.2.1, Grafana v11.5.2)
+# Target: Amazon EKS (ap-south-1 Mumbai)
+#
+# Specially tuned for on-demand demonstration on EKS worker nodes (configured
+# default: 2x t3.small Spot instances providing ~3.2 GiB allocatable RAM).
+# NOTE: Resource requests are reservations, not caps. Actual headroom and memory
+# spikes must be monitored actively against allocatable node capacity.
+# ==============================================================================
+
+# Disable AlertManager for demo sessions to conserve memory and pod slots
+alertmanager:
+  enabled: false
+
+# ------------------------------------------------------------------------------
+# Prometheus Operator Controller
+# ------------------------------------------------------------------------------
+prometheusOperator:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      cpu: 150m
+      memory: 200Mi
+
+# ------------------------------------------------------------------------------
+# Grafana Dashboard UI
+# ------------------------------------------------------------------------------
+grafana:
+  enabled: true
+
+  # Secure credential management: references a pre-created Kubernetes Secret
+  # Command: kubectl create secret generic grafana-admin-credentials -n monitoring --from-literal=admin-password=...
+  admin:
+    existingSecret: "grafana-admin-credentials"
+    userKey: "admin-user"
+    passwordKey: "admin-password"
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 100Mi
+    limits:
+      cpu: 150m
+      memory: 200Mi
+
+  # Ephemeral storage for demo sessions
+  persistence:
+    enabled: false
+
+  # Pre-configure dashboards for Kubernetes compute resources
+  defaultDashboardsEnabled: true
+
+# ------------------------------------------------------------------------------
+# Prometheus Core Engine
+# ------------------------------------------------------------------------------
+prometheus:
+  enabled: true
+
+  prometheusSpec:
+    # 4-hour retention keeps TSDB storage under ~200MB, avoiding EBS volume bloat
+    retention: "4h"
+    scrapeInterval: "30s"
+    evaluationInterval: "30s"
+
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 250m
+        memory: 512Mi
+
+    # Ephemeral storage (emptyDir) for lightweight demonstration
+    storageSpec: {}
+
+    # Scrape only pods and endpoints in logisphere and system namespaces
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+    serviceMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - logisphere
+            - kube-system
+
+    podMonitorNamespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - logisphere
+            - kube-system
+
+# ------------------------------------------------------------------------------
+# Node Exporter (DaemonSet on each worker node)
+# ------------------------------------------------------------------------------
+nodeExporter:
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 30Mi
+    limits:
+      cpu: 50m
+      memory: 50Mi
+
+# ------------------------------------------------------------------------------
+# Kube-State-Metrics
+# ------------------------------------------------------------------------------
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 40Mi
+    limits:
+      cpu: 50m
+      memory: 80Mi
