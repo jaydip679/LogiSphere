@@ -1,0 +1,42 @@
+# ==============================================================================
+# LogiSphere — Example Configuration Variables Template
+# Copy this file to 'terraform.tfvars' to customize default values.
+# ==============================================================================
+
+# Target AWS Region
+aws_region = "ap-south-1"
+
+# Environment & Resource Naming
+environment  = "production"
+project_name = "logisphere"
+cluster_name = "logisphere-eks-cluster"
+
+# Kubernetes Version
+kubernetes_version = "1.30"
+
+# Networking & Cost Optimization
+# Set single_nat_gateway = true to provision 1 shared NAT Gateway (~$32/mo savings)
+enable_nat_gateway = true
+single_nat_gateway = true
+
+# EKS Worker Node Sizing & Capacity
+# Use "SPOT" for on-demand demo sessions (~70% discount) or "ON_DEMAND"
+node_capacity_type = "SPOT"
+node_instance_types = ["t3.small"]
+
+# Node Group Scaling
+node_scaling_config = {
+  desired_size = 2
+  min_size     = 1
+  max_size     = 3
+}
+
+node_disk_size_gb = 20
+
+# Common Resource Tags
+tags = {
+  Project     = "LogiSphere"
+  Environment = "production"
+  ManagedBy   = "Terraform"
+  CostCenter  = "Demonstration"
+}
