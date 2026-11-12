@@ -15,6 +15,7 @@ resource "aws_eks_cluster" "main" {
     security_group_ids      = [var.cluster_security_group_id]
     endpoint_private_access = var.endpoint_private_access
     endpoint_public_access  = var.endpoint_public_access
+    public_access_cidrs     = var.public_access_cidrs
   }
 
   # Enable core control plane audit and diagnostic logging
@@ -50,7 +51,53 @@ resource "aws_iam_openid_connect_provider" "oidc" {
 }
 
 # ------------------------------------------------------------------------------
-# 3. Amazon EKS Managed Worker Node Group
+# 3. Launch Template for Managed Node Group
+# Attaches custom security group, configures encrypted gp3 EBS, and enforces IMDSv2
+# ------------------------------------------------------------------------------
+resource "aws_launch_template" "nodes" {
+  name_prefix   = "${var.project_name}-${var.environment}-node-"
+  description   = "Launch template for LogiSphere EKS managed worker nodes with custom security groups and IMDSv2"
+  instance_type = var.node_instance_types[0]
+
+  vpc_security_group_ids = [
+    var.node_security_group_id,
+    aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  ]
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = var.node_disk_size_gb
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required" # Enforce IMDSv2
+    http_put_response_hop_limit = 1          # Restrict IMDS access strictly to host OS, preventing container/pod SSRF credential theft. (IRSA uses projected OIDC tokens and STS directly, not IMDS)
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(
+      var.tags,
+      {
+        Name = "${var.project_name}-${var.environment}-node"
+      }
+    )
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# ------------------------------------------------------------------------------
+# 4. Amazon EKS Managed Worker Node Group
 # Deployed strictly in private subnets with Spot instances for cost control
 # ------------------------------------------------------------------------------
 resource "aws_eks_node_group" "main" {
@@ -59,9 +106,12 @@ resource "aws_eks_node_group" "main" {
   node_role_arn   = var.node_role_arn
   subnet_ids      = var.node_subnet_ids
 
-  capacity_type  = var.node_capacity_type
-  instance_types = var.node_instance_types
-  disk_size      = var.node_disk_size_gb
+  capacity_type = var.node_capacity_type
+
+  launch_template {
+    id      = aws_launch_template.nodes.id
+    version = aws_launch_template.nodes.latest_version
+  }
 
   scaling_config {
     desired_size = var.node_scaling_config.desired_size
@@ -94,7 +144,7 @@ resource "aws_eks_node_group" "main" {
 }
 
 # ------------------------------------------------------------------------------
-# 4. Essential Managed EKS Add-ons
+# 5. Essential Managed EKS Add-ons
 # ------------------------------------------------------------------------------
 resource "aws_eks_addon" "vpc_cni" {
   cluster_name = aws_eks_cluster.main.name

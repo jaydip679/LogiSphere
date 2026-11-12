@@ -31,9 +31,9 @@ variable "oidc_provider_arn" {
 }
 
 variable "sqs_queue_prefix" {
-  description = "Prefix for SQS queues that microservices are permitted to access via IRSA"
+  description = "Prefix for SQS queues that microservices are permitted to access via IRSA (strictly logisphere-eks-*)"
   type        = string
-  default     = "logisphere-"
+  default     = "logisphere-eks-"
 }
 
 variable "tags" {

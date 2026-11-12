@@ -128,12 +128,36 @@ resource "aws_security_group_rule" "cluster_from_nodes" {
   source_security_group_id = aws_security_group.nodes.id
 }
 
-# Allow public ALB to forward ingress HTTP/HTTPS traffic to microservices on the worker nodes
-resource "aws_security_group_rule" "nodes_from_alb" {
-  description              = "Allow ALB to route external traffic to worker node target groups"
+# ------------------------------------------------------------------------------
+# Ingress: ALB to Worker Nodes
+# Restricted strictly to Kubernetes NodePort service range (target-type instance)
+# and API Gateway direct Pod ports (target-type ip)
+# ------------------------------------------------------------------------------
+resource "aws_security_group_rule" "nodes_from_alb_nodeports" {
+  description              = "Allow ALB to route ingress traffic to Kubernetes NodePort services"
   type                     = "ingress"
-  from_port                = 0
-  to_port                  = 65535
+  from_port                = 30000
+  to_port                  = 32767
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.nodes.id
+  source_security_group_id = aws_security_group.alb.id
+}
+
+resource "aws_security_group_rule" "nodes_from_alb_gateway_pod" {
+  description              = "Allow ALB to route ingress traffic directly to API Gateway Pod (port 5000)"
+  type                     = "ingress"
+  from_port                = 5000
+  to_port                  = 5000
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.nodes.id
+  source_security_group_id = aws_security_group.alb.id
+}
+
+resource "aws_security_group_rule" "nodes_from_alb_gateway_pod_alt" {
+  description              = "Allow ALB to route ingress traffic directly to API Gateway Pod (port 10000)"
+  type                     = "ingress"
+  from_port                = 10000
+  to_port                  = 10000
   protocol                 = "tcp"
   security_group_id        = aws_security_group.nodes.id
   source_security_group_id = aws_security_group.alb.id

@@ -50,8 +50,8 @@ terraform/
     ├── security_groups/     # Control plane, worker nodes, and ALB firewall rules
     ├── ecr/                 # 6 private repositories with 7-day auto-purge lifecycle
     ├── iam/                 # Base IAM roles for EKS control plane and worker nodes
-    ├── eks/                 # EKS v1.30 control plane, managed node group, OIDC provider
-    └── irsa/                # OIDC Web Identity roles for ALB Controller & SQS access
+    ├── eks/                 # EKS v1.36 control plane, launch template, managed nodes, OIDC provider
+    └── irsa/                # OIDC Web Identity roles for ALB Controller & SQS access (logisphere-eks-*)
 ```
 
 ---
@@ -89,9 +89,10 @@ terraform init
 ```
 
 ### Step 2: Validate & Review Infrastructure Plan
+Configure your private `terraform.tfvars` from `terraform.tfvars.example` (ensuring your workstation public IP `/32` is specified in `cluster_endpoint_public_access_cidrs`):
 ```bash
 terraform validate
-terraform plan -out=tfplan
+terraform plan -var-file="terraform.tfvars" -out=tfplan
 ```
 
 ### Step 3: Apply (Provision Cloud Resources)

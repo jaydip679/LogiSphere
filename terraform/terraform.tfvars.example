@@ -11,8 +11,18 @@ environment  = "production"
 project_name = "logisphere"
 cluster_name = "logisphere-eks-cluster"
 
-# Kubernetes Version
-kubernetes_version = "1.30"
+# Kubernetes Version in Standard Support (EKS v1.36)
+kubernetes_version = "1.36"
+
+# Restrict public Kubernetes API access
+# CRITICAL SECURITY NOTE: Never leave this set to ["0.0.0.0/0"] in production.
+# Replace the documentation CIDR below with your actual workstation public IP address in CIDR format
+# (e.g. ["198.51.100.42/32"]) in your private 'terraform.tfvars' file.
+# You can find your current public IP by running: curl -s https://checkip.amazonaws.com
+cluster_endpoint_public_access_cidrs = ["203.0.113.50/32"] # REPLACE WITH YOUR WORKSTATION PUBLIC IP /32
+
+# SQS Queue Prefix for EKS Workloads (enforces isolation from localstack and demo queues)
+sqs_queue_prefix = "logisphere-eks-"
 
 # Networking & Cost Optimization
 # Set single_nat_gateway = true to provision 1 shared NAT Gateway (~$32/mo savings)

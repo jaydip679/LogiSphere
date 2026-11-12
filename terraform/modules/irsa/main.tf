@@ -299,6 +299,11 @@ resource "aws_iam_policy" "microservices_sqs" {
           "sqs:ListQueues"
         ]
         Resource = "*"
+        Condition = {
+          StringLike = {
+            "sqs:QueueNamePrefix" = "${var.sqs_queue_prefix}*"
+          }
+        }
       }
     ]
   })

@@ -74,11 +74,14 @@ module "eks" {
   node_role_arn             = module.iam.node_role_arn
   endpoint_public_access    = var.cluster_endpoint_public_access
   endpoint_private_access   = var.cluster_endpoint_private_access
+  public_access_cidrs       = var.cluster_endpoint_public_access_cidrs
   node_instance_types       = var.node_instance_types
   node_capacity_type        = var.node_capacity_type
   node_scaling_config       = var.node_scaling_config
   node_disk_size_gb         = var.node_disk_size_gb
   tags                      = var.tags
+
+  depends_on = [module.iam]
 }
 
 # ------------------------------------------------------------------------------

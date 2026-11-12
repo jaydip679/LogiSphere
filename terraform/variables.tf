@@ -73,15 +73,21 @@ variable "cluster_name" {
 }
 
 variable "kubernetes_version" {
-  description = "Desired Kubernetes control plane version"
+  description = "Desired Kubernetes control plane version in EKS standard support (v1.36)"
   type        = string
-  default     = "1.30"
+  default     = "1.36"
 }
 
 variable "cluster_endpoint_public_access" {
   description = "Enable public API server endpoint access (for kubectl access from workstation)"
   type        = bool
   default     = true
+}
+
+variable "cluster_endpoint_public_access_cidrs" {
+  description = "List of CIDR blocks permitted to access the public EKS API endpoint (restrict to workstation IP for maximum security)"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
 
 variable "cluster_endpoint_private_access" {
@@ -147,9 +153,9 @@ variable "ecr_service_names" {
 }
 
 variable "sqs_queue_prefix" {
-  description = "Prefix for AWS SQS queues that microservices are permitted to access via IRSA"
+  description = "Prefix for AWS SQS queues that EKS microservices are permitted to access via IRSA (strictly isolated to logisphere-eks-*)"
   type        = string
-  default     = "logisphere-"
+  default     = "logisphere-eks-"
 }
 
 # ------------------------------------------------------------------------------
