@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migration
+  namespace: logisphere
+  labels:
+    app.kubernetes.io/name: prisma-migration
+    app.kubernetes.io/part-of: logisphere
+    app.kubernetes.io/component: database-migration
+spec:
+  # Do not leave failed jobs running indefinitely
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prisma-migration
+        app.kubernetes.io/part-of: logisphere
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prisma-migrator
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          # Migration image built from docker/migration.Dockerfile
+          image: "<AWS_ACCOUNT_ID>.dkr.ecr.ap-south-1.amazonaws.com/logisphere-migration:1.0.0"
+          imagePullPolicy: IfNotPresent
+          # Executes sequential schema migrations (app_auth -> shipment -> fleet -> tracking -> notification)
+          # followed by idempotent admin account seeding
+          command: ["sh", "-c", "node scripts/migrate-all.js && node services/auth-service/scripts/seedAdmin.js"]
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: TARGET_DB
+              value: "neon"
+            - name: USE_NEON
+              value: "true"
+          # Injects DIRECT_URL (unpooled Neon connection for DDL migrations) and ADMIN_INITIAL_PASSWORD
+          # from the dedicated migration secret
+          envFrom:
+            - secretRef:
+                name: logisphere-migration-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
