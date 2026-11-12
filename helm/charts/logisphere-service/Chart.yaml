@@ -1,0 +1,14 @@
+apiVersion: v2
+name: logisphere-service
+description: Reusable microservice Helm chart for the LogiSphere logistics platform on Amazon EKS
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - logistics
+  - microservice
+  - nodejs
+  - eks
+home: "https://github.com/jaydip679/LogiSphere"
+sources:
+  - "https://github.com/jaydip679/LogiSphere"

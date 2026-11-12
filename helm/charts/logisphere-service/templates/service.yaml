@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "logisphere-service.fullname" . }}
+  labels:
+    {{- include "logisphere-service.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: {{ .Values.service.protocol | default "TCP" }}
+      name: http
+  selector:
+    {{- include "logisphere-service.selectorLabels" . | nindent 4 }}

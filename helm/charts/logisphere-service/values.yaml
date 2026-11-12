@@ -1,0 +1,156 @@
+# ==============================================================================
+# LogiSphere — Reusable Microservice Base Values
+# Target: Amazon EKS (ap-south-1 Mumbai)
+#
+# These base defaults are inherited by all six LogiSphere microservices.
+# Service-specific configurations (ECR image repository, ports 5000-5005,
+# schemas, SQS IRSA, and Ingress) are overridden via dedicated values files:
+#   helm/values/<service>.values.yaml
+# ==============================================================================
+
+replicaCount: 1
+
+image:
+  repository: logisphere
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default fallback is .Chart.AppVersion.
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ------------------------------------------------------------------------------
+# ServiceAccount & AWS IAM Roles for Service Accounts (IRSA)
+# ------------------------------------------------------------------------------
+serviceAccount:
+  # Specifies whether a dedicated ServiceAccount should be created
+  create: true
+  # Automatically mount ServiceAccount API token credentials
+  automount: true
+  # Annotations to attach to the ServiceAccount.
+  # SQS-enabled microservices (shipment, fleet, tracking, notification) override this with:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<ACCOUNT_ID>:role/logisphere-production-microservices-sqs-role
+  annotations: {}
+  # The name of the service account to use. If not set, generated using fullname template.
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+# ------------------------------------------------------------------------------
+# Linux User & Pod Security Standards (Restricted Pod Security Standard)
+# ------------------------------------------------------------------------------
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+# ------------------------------------------------------------------------------
+# Kubernetes ClusterIP Service
+# ------------------------------------------------------------------------------
+service:
+  type: ClusterIP
+  port: 5000
+  targetPort: 5000
+  protocol: TCP
+
+# ------------------------------------------------------------------------------
+# AWS Application Load Balancer Ingress
+# Disabled by default; enabled ONLY on the 'api-gateway' release
+# ------------------------------------------------------------------------------
+ingress:
+  enabled: false
+  className: "alb"
+  annotations: {}
+    # kubernetes.io/ingress.class: alb
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:...
+  hosts: []
+  tls: []
+
+# ------------------------------------------------------------------------------
+# Compute Resource Allocation (Node Sizing: 2x t3.small Spot Instances)
+#
+# NOTE: Two t3.small instances provide 4 GiB raw memory total (2 GiB per node).
+# Usable headroom is governed by actual node allocatable memory (after OS kernel,
+# kubelet, and eviction reserves) and shared cluster components (CoreDNS,
+# AWS VPC CNI, kube-proxy, AWS Load Balancer Controller, Metrics Server, and
+# Prometheus/Grafana). Combined base application request is 768 MiB (6x 128 MiB).
+# Actual scaling capacity must be monitored against allocatable node capacity.
+# ------------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# ------------------------------------------------------------------------------
+# Container Health Probes (Aligned with Express GET /health)
+# ------------------------------------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+
+# ------------------------------------------------------------------------------
+# Horizontal Pod Autoscaling (HPA)
+# Disabled by default; enabled per service after Metrics Server is deployed
+# ------------------------------------------------------------------------------
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secret Injections
+# ------------------------------------------------------------------------------
+# Key-value environment variables passed directly to the container
+env: []
+
+# References to ConfigMaps and Secrets (envFrom)
+# Used to mount scoped secrets e.g. auth-service-secrets, backend-service-secrets
+envFrom: []
+
+# ------------------------------------------------------------------------------
+# Volumes & Volume Mounts
+# Used for mounting RSA keys (e.g. jwt-private.key on auth-service)
+# ------------------------------------------------------------------------------
+volumes: []
+volumeMounts: []
+
+# ------------------------------------------------------------------------------
+# Node Scheduling & Placement
+# ------------------------------------------------------------------------------
+nodeSelector: {}
+tolerations: []
+affinity: {}

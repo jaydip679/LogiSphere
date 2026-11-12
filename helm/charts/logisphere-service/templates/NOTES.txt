@@ -1,0 +1,15 @@
+LogiSphere Microservice '{{ include "logisphere-service.fullname" . }}' deployed successfully!
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+Public AWS Application Load Balancer (ALB) Ingress is enabled.
+To retrieve the public endpoint URL:
+  kubectl get ingress -n {{ .Release.Namespace }} {{ include "logisphere-service.fullname" . }} -w
+{{- else }}
+Internal ClusterIP Service:
+  Internal DNS: http://{{ include "logisphere-service.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+  Port-forwarding command for local debugging:
+    kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "logisphere-service.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+{{- end }}
