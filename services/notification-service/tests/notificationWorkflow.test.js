@@ -27,7 +27,22 @@ const mockPrisma = {
 jest.mock('../src/database/prisma', () => mockPrisma);
 
 // Mock SQS client
-const mockSqsSend = jest.fn().mockResolvedValue({});
+const mockSqsSend = jest.fn().mockImplementation((command) => {
+  if (command && (command.QueueName || command.constructor?.name === 'GetQueueUrlCommand')) {
+    return Promise.resolve({
+      QueueUrl: `http://localhost:4566/000000000000/${command.QueueName || 'mock-queue'}`,
+    });
+  }
+  return Promise.resolve({ MessageId: 'msg_sqs_1' });
+});
+
+class MockGetQueueUrlCommand {
+  constructor(args) {
+    this.args = args;
+    this.QueueName = args?.QueueName;
+  }
+}
+
 jest.mock('@aws-sdk/client-sqs', () => ({
   SQSClient: jest.fn().mockImplementation(() => ({
     send: mockSqsSend,
@@ -35,6 +50,7 @@ jest.mock('@aws-sdk/client-sqs', () => ({
   ReceiveMessageCommand: jest.fn(),
   DeleteMessageCommand: jest.fn(),
   SendMessageCommand: jest.fn().mockImplementation((args) => args),
+  GetQueueUrlCommand: MockGetQueueUrlCommand,
 }));
 
 const config = require('../src/config');
@@ -49,6 +65,11 @@ describe('Notification Service — SQS Ingestion, APIs & Reliability', () => {
   const internalKey = config.internalServiceKey || 'dev_internal_secret_key';
 
   beforeAll(() => {
+    notificationEventConsumer.queueUrl =
+      'http://localhost:4566/000000000000/logisphere-local-notification-queue';
+    notificationEventConsumer.dlqUrl =
+      'http://localhost:4566/000000000000/logisphere-local-notification-dlq';
+
     const privateKeyPath = path.resolve(__dirname, '../../auth-service/secrets/jwt-private.key');
     if (fs.existsSync(privateKeyPath)) {
       privateKey = fs.readFileSync(privateKeyPath, 'utf8');

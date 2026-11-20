@@ -87,6 +87,12 @@ jobs:
           NODE_ENV: test
           JWT_ACCESS_EXPIRY: 15m
           JWT_REFRESH_EXPIRY_DAYS: 7
+          NOTIFICATION_QUEUE_URL: http://localhost:4566/000000000000/logisphere-notification-queue
+          NOTIFICATION_DLQ_URL: http://localhost:4566/000000000000/logisphere-notification-dlq
+          TRACKING_QUEUE_URL: http://localhost:4566/000000000000/logisphere-tracking-queue
+          TRACKING_DLQ_URL: http://localhost:4566/000000000000/logisphere-tracking-dlq
+          FLEET_QUEUE_URL: http://localhost:4566/000000000000/logisphere-fleet-queue
+          FLEET_DLQ_URL: http://localhost:4566/000000000000/logisphere-fleet-dlq
 
   # ==============================================================================
   # 3. Frontend Web App Build Verification
