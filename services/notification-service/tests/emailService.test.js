@@ -1,18 +1,19 @@
-// Mock Prisma
-const mockPrisma = {
-  notificationLog: {
-    create: jest.fn().mockResolvedValue({ id: 'log_1' }),
-  },
-};
-
-jest.mock('../src/database/prisma', () => mockPrisma);
-
+const notificationLogRepository = require('../src/repositories/notificationLogRepository');
 const emailService = require('../src/services/emailService');
 
 describe('Email Service — Failsafe Transport & Delivery', () => {
+  let createLogSpy;
+
   beforeEach(() => {
     jest.clearAllMocks();
     emailService.providerType = 'MOCK';
+    createLogSpy = jest
+      .spyOn(notificationLogRepository, 'createLog')
+      .mockResolvedValue({ id: 'log_1' });
+  });
+
+  afterEach(() => {
+    createLogSpy.mockRestore();
   });
 
   it('delivers email in development mock mode and logs outcome', async () => {
@@ -23,14 +24,12 @@ describe('Email Service — Failsafe Transport & Delivery', () => {
     });
 
     expect(outcome.success).toBe(true);
-    expect(mockPrisma.notificationLog.create).toHaveBeenCalledWith(
+    expect(createLogSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
-          channel: 'EMAIL',
-          recipient: 'customer@logisphere.local',
-          status: 'SENT',
-          subject: 'Shipment Created',
-        }),
+        channel: 'EMAIL',
+        recipient: 'customer@logisphere.local',
+        status: 'SENT',
+        subject: 'Shipment Created',
       })
     );
   });
@@ -46,7 +45,7 @@ describe('Email Service — Failsafe Transport & Delivery', () => {
   });
 
   it('fails safely without throwing when transport errors occur', async () => {
-    mockPrisma.notificationLog.create.mockRejectedValueOnce(new Error('Simulated database error'));
+    createLogSpy.mockRejectedValueOnce(new Error('Simulated database error'));
 
     const outcome = await emailService.sendEmail({
       to: 'error@logisphere.local',
@@ -83,12 +82,10 @@ describe('Email Service — Failsafe Transport & Delivery', () => {
             subject: 'Shipment Assigned',
           })
         );
-        expect(mockPrisma.notificationLog.create).toHaveBeenCalledWith(
+        expect(createLogSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({
-              status: 'SENT',
-              recipient: 'customer@realworld.com',
-            }),
+            status: 'SENT',
+            recipient: 'customer@realworld.com',
           })
         );
       } finally {
@@ -114,13 +111,11 @@ describe('Email Service — Failsafe Transport & Delivery', () => {
 
         expect(outcome.success).toBe(false);
         expect(outcome.error).toBe('Gmail quota limit exceeded');
-        expect(mockPrisma.notificationLog.create).toHaveBeenCalledWith(
+        expect(createLogSpy).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({
-              status: 'FAILED',
-              recipient: 'failed@realworld.com',
-              error: 'Gmail quota limit exceeded',
-            }),
+            status: 'FAILED',
+            recipient: 'failed@realworld.com',
+            error: 'Gmail quota limit exceeded',
           })
         );
       } finally {
