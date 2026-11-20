@@ -1,0 +1,197 @@
+name: LogiSphere CI
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==============================================================================
+  # 1. Code Quality, Formatting & Static Analysis
+  # ==============================================================================
+  code-quality:
+    name: Code Quality & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Check Code Formatting (Prettier)
+        run: npm run format:check
+        continue-on-error: true # Non-blocking warning for formatting skews
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true # Reports linting issues without halting the pipeline
+
+  # ==============================================================================
+  # 2. Automated Unit Tests Across Workspaces
+  # ==============================================================================
+  unit-tests:
+    name: Microservices Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Generate Ephemeral RSA 2048-bit Keypair
+        run: npm run generate:keys
+
+      - name: Generate Prisma Client Models for All Microservices
+        run: npm run db:generate
+
+      - name: Run Jest Test Suites
+        run: npm run test --workspaces --if-present
+        env:
+          NODE_ENV: test
+          JWT_ACCESS_EXPIRY: 15m
+          JWT_REFRESH_EXPIRY_DAYS: 7
+
+  # ==============================================================================
+  # 3. Frontend Web App Build Verification
+  # ==============================================================================
+  frontend-build:
+    name: Frontend Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Workspace Dependencies
+        run: npm ci
+
+      - name: Build React 18 / Vite Production Bundle
+        run: npm run build --workspace=@logisphere/web-app
+        env:
+          VITE_API_BASE_URL: https://logisphere-api.onrender.com
+
+  # ==============================================================================
+  # 4. Infrastructure as Code Validation (Terraform)
+  # ==============================================================================
+  terraform-validate:
+    name: Terraform Format & Validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - name: Check Terraform Formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize Terraform (Local / Backend-False)
+        run: terraform init -backend=false
+
+      - name: Validate Terraform Configuration
+        run: terraform validate
+
+  # ==============================================================================
+  # 5. Kubernetes & Helm Chart Verification
+  # ==============================================================================
+  helm-validate:
+    name: Helm Chart Lint & Template Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: "v3.15.4"
+
+      - name: Lint Base Reusable Chart
+        run: helm lint helm/charts/logisphere-service
+
+      - name: Lint All Six Production Service Values Files
+        run: |
+          for values_file in helm/values/*.values.yaml; do
+            echo "Linting chart with $values_file..."
+            helm lint helm/charts/logisphere-service -f "$values_file"
+          done
+
+      - name: Verify Template Rendering for All Microservices
+        run: |
+          services=("api-gateway" "auth-service" "shipment-service" "fleet-dispatch-service" "tracking-service" "notification-service")
+          for svc in "${services[@]}"; do
+            echo "Rendering manifests for $svc..."
+            helm template "$svc" helm/charts/logisphere-service -f "helm/values/$svc.values.yaml" > /dev/null
+          done
+          echo "All 6 microservices rendered valid Kubernetes manifests successfully."
+
+  # ==============================================================================
+  # 6. Docker Build Verification
+  # ==============================================================================
+  docker-build:
+    name: Dockerfile Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API Gateway Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/api-gateway/Dockerfile
+          push: false
+          load: false
+
+      - name: Build Auth Service Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/auth-service/Dockerfile
+          push: false
+          load: false
+
+      - name: Build Centralized Migration Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/migration.Dockerfile
+          push: false
+          load: false
