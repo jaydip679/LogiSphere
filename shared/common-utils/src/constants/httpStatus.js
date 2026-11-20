@@ -13,6 +13,7 @@ const HttpStatus = Object.freeze({
   INTERNAL_SERVER_ERROR: 500,
   BAD_GATEWAY: 502,
   SERVICE_UNAVAILABLE: 503,
+  GATEWAY_TIMEOUT: 504,
 });
 
 module.exports = HttpStatus;
