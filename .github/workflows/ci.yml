@@ -67,8 +67,22 @@ jobs:
       - name: Generate Prisma Client Models for All Microservices
         run: npm run db:generate
 
-      - name: Run Jest Test Suites
-        run: npm run test --workspaces --if-present
+      - name: Run Unit Tests for Shared Packages
+        run: |
+          npm test --workspace=@logisphere/common-utils
+          npm test --workspace=@logisphere/event-contracts
+          npm test --workspace=@logisphere/logger
+        env:
+          NODE_ENV: test
+
+      - name: Run Unit Tests for Microservices
+        run: |
+          npm test --workspace=@logisphere/api-gateway
+          npm test --workspace=@logisphere/auth-service
+          npm test --workspace=@logisphere/fleet-dispatch-service
+          npm test --workspace=@logisphere/notification-service
+          npm test --workspace=@logisphere/shipment-service
+          npm test --workspace=@logisphere/tracking-service
         env:
           NODE_ENV: test
           JWT_ACCESS_EXPIRY: 15m
@@ -96,6 +110,7 @@ jobs:
       - name: Build React 18 / Vite Production Bundle
         run: npm run build --workspace=@logisphere/web-app
         env:
+          VITE_API_GATEWAY_URL: https://logisphere-api.onrender.com
           VITE_API_BASE_URL: https://logisphere-api.onrender.com
 
   # ==============================================================================

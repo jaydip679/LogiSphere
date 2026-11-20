@@ -1,13 +1,18 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:5000';
+const API_BASE_URL =
+  import.meta.env.VITE_API_GATEWAY_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000'
+    : 'https://logisphere-api.onrender.com');
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 45000, // 45s to allow for Render free-tier cold-starts
 });
 
 // Request interceptor to attach JWT accessToken
