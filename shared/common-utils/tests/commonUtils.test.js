@@ -15,6 +15,7 @@ describe('Common Utils', () => {
       expect(HttpStatus.NOT_FOUND).toBe(404);
       expect(HttpStatus.BAD_REQUEST).toBe(400);
       expect(HttpStatus.INTERNAL_SERVER_ERROR).toBe(500);
+      expect(HttpStatus.BAD_GATEWAY).toBe(502);
     });
   });
 
